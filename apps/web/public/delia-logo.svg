@@ -1,0 +1,11 @@
+<svg width="170" height="48" viewBox="0 0 170 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Delia</title>
+  <desc id="desc">Delia's warm, precise conversation mark and wordmark.</desc>
+  <rect x="1" y="1" width="46" height="46" rx="15" fill="#111210"/>
+  <path d="M14 23.6C14 17.746 18.746 13 24.6 13H29.4C33.046 13 36 15.954 36 19.6V23.4C36 29.254 31.254 34 25.4 34H22.5L17 38V33.2C15.14 31.28 14 27.64 14 23.6Z" fill="#F4F5EF"/>
+  <path d="M20 23.5C21.25 25.2 22.9 26.05 25 26.05C27.1 26.05 28.75 25.2 30 23.5" stroke="#111210" stroke-width="2.35" stroke-linecap="round"/>
+  <circle cx="21.5" cy="20.5" r="1.35" fill="#111210"/>
+  <circle cx="28.5" cy="20.5" r="1.35" fill="#111210"/>
+  <circle cx="38" cy="10" r="5" fill="#61D39B" stroke="#F4F5EF" stroke-width="2"/>
+  <text x="59" y="32" fill="#111210" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="780" letter-spacing="-1.35">Delia</text>
+</svg>

@@ -1,0 +1,10 @@
+<svg width="244" height="48" viewBox="0 0 244 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">ReceptionistAI</title>
+  <desc id="desc">A conversation mark with a live signal, followed by the ReceptionistAI wordmark.</desc>
+  <rect x="1" y="1" width="46" height="46" rx="13" fill="#151515"/>
+  <path d="M13 17.75C13 14.5744 15.5744 12 18.75 12H29.25C32.4256 12 35 14.5744 35 17.75V24.25C35 27.4256 32.4256 30 29.25 30H23.75L18.1 35V30H18.75C15.5744 30 13 27.4256 13 24.25V17.75Z" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M19 21H29M19 25H25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="37" cy="11" r="6" fill="#53C58A" stroke="white" stroke-width="2"/>
+  <text x="59" y="31.5" fill="#151515" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="-1.2">Receptionist</text>
+  <text x="197" y="31.5" fill="#176B4D" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="-1.2">AI</text>
+</svg>
