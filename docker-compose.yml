@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ai_receptionist
+      POSTGRES_USER: receptionist
+      POSTGRES_PASSWORD: receptionist
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U receptionist -d ai_receptionist']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://receptionist:receptionist@postgres:5432/ai_receptionist?schema=public
+      API_PORT: 4000
+      WEB_ORIGIN: http://localhost:5174
+      # Local development only: mounts your Google ADC file read-only. It is not copied into the image or repository.
+      GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcloud-adc.json
+    volumes:
+      - type: bind
+        source: ${APPDATA}/gcloud/application_default_credentials.json
+        target: /tmp/gcloud-adc.json
+        read_only: true
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/api/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      VITE_API_PROXY_TARGET: http://api:4000
+    command: sh -c 'npm ci && npm run dev --workspace=@receptionist/web -- --host 0.0.0.0 --port 5173 --force'
+    ports:
+      - '5174:5173'
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  web_node_modules:
