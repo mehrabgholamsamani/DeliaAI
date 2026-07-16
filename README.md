@@ -1,4 +1,4 @@
-# Delia
+# DeliaAI
 
 > A production-minded AI receptionist platform built to make the difficult parts visible: tenant isolation, voice reliability, deterministic booking actions, public website embeds, and an internal CRM that stays in sync with the receptionist.
 
