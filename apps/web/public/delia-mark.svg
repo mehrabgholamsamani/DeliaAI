@@ -1,0 +1,7 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Delia">
+  <rect width="64" height="64" rx="19" fill="#121212"/>
+  <path d="M32 11L51 22V42L32 53L13 42V22L32 11Z" stroke="#fff" stroke-width="3.4" stroke-linejoin="round"/>
+  <path d="M32 20L43.2 26.5V39.5L32 46L20.8 39.5V26.5L32 20Z" fill="#fff"/>
+  <path d="M43.2 26.5V39.5L32 46V33L43.2 26.5Z" fill="#61D39B"/>
+  <path d="M32 20L43.2 26.5L32 33L20.8 26.5L32 20Z" fill="#E9FFF2"/>
+</svg>

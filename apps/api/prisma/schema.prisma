@@ -1,0 +1,375 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Stage 1 establishes the database connection and migration pipeline.
+// Booking and CRM models are introduced in Stage 2.
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BusinessSettings {
+  id                  String   @id @default(cuid())
+  workspaceId         String   @unique @default("legacy")
+  businessName        String
+  industry            String   @default("")
+  timezone            String   @default("Europe/Berlin")
+  operatingWeekdays   Int[]    @default([1, 2, 3, 4, 5])
+  slotStartHours      Int[]    @default([9, 10, 11, 13, 14, 15, 16])
+  slotDurationMinutes Int      @default(60)
+  bookingPaused       Boolean  @default(false)
+  bookingPauseMessage String?
+  companyDescription  String   @default("")
+  greeting            String   @default("Hello. How can I help you today?")
+  assistantTone       String   @default("warm and professional")
+  bookingInstructions String   @default("Offer live availability and always ask for confirmation before booking.")
+  handoffInstructions String   @default("Offer a human handoff when the answer is not in approved knowledge.")
+  contactDetails      String   @default("")
+  receptionistPersonaId String @default("maya")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Workspace {
+  id                  String   @id @default(cuid())
+  name                String
+  onboardingCompleted Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  owner               UserAccount?
+  businessSettings    BusinessSettings?
+  services            Service[]
+  customers           Customer[]
+  bookings            Booking[]
+  availabilityOverrides AvailabilityOverride[]
+  knowledgeArticles   KnowledgeArticle[]
+  handoffRequests     HandoffRequest[]
+  receptionistFeedback ReceptionistFeedback[]
+  conversationSessions ConversationSession[]
+  publicReceptionist  PublicReceptionist?
+  auditLogs           AuditLog[]
+}
+
+model UserAccount {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  workspaceId  String        @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sessions     AuthSession[]
+  identities   AuthIdentity[]
+}
+
+model AuthIdentity {
+  id              String      @id @default(cuid())
+  userId          String
+  provider        String
+  providerSubject String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  user            UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@unique([userId, provider])
+}
+
+model OAuthLoginAttempt {
+  id           String   @id @default(cuid())
+  stateHash    String   @unique
+  codeVerifier String
+  nonce        String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model AuthSession {
+  id        String      @id @default(cuid())
+  userId    String
+  tokenHash String      @unique
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Service {
+  id              String    @id @default(cuid())
+  workspaceId     String    @default("legacy")
+  slug            String
+  name            String
+  description     String
+  priceLabel      String
+  durationMinutes Int
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  bookings        Booking[]
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+}
+
+model Customer {
+  id        String    @id @default(cuid())
+  workspaceId String  @default("legacy")
+  name      String
+  email     String
+  phone     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookings  Booking[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+}
+
+enum BookingStatus {
+  OPEN
+  CANCELED
+  COMPLETED
+}
+
+model Booking {
+  id                    String        @id @default(cuid())
+  workspaceId           String        @default("legacy")
+  customerId            String
+  serviceId             String
+  appointmentAt         DateTime
+  appointmentEndAt      DateTime
+  status                BookingStatus @default(OPEN)
+  notes                 String?
+  managementTokenHash   String?       @unique
+  managementTokenExpiry DateTime?
+  canceledAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  customer              Customer      @relation(fields: [customerId], references: [id])
+  service               Service       @relation(fields: [serviceId], references: [id])
+  workspace             Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, appointmentAt, appointmentEndAt])
+  @@index([customerId, createdAt])
+}
+
+enum AvailabilityStatus {
+  OPEN
+  BUSY
+}
+
+model AvailabilityOverride {
+  id          String             @id @default(cuid())
+  workspaceId String             @default("legacy")
+  slotStartAt DateTime
+  status      AvailabilityStatus
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slotStartAt])
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  workspaceId String  @default("legacy")
+  action     String
+  targetType String
+  targetId   String?
+  actorType  String
+  actorId    String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([targetType, targetId, createdAt])
+  @@index([createdAt])
+}
+
+model KnowledgeArticle {
+  id        String   @id @default(cuid())
+  workspaceId String @default("legacy")
+  slug      String
+  title     String
+  content   String
+  isActive  Boolean  @default(true)
+  category  String   @default("FAQ")
+  sourceLabel String?
+  embedding Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, slug])
+}
+
+model HandoffRequest {
+  id        String   @id @default(cuid())
+  workspaceId String @default("legacy")
+  name      String
+  email     String
+  phone     String
+  message   String
+  sessionId String?
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model ReceptionistFeedback {
+  id        String   @id @default(cuid())
+  workspaceId String @default("legacy")
+  question  String
+  sessionId String?
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model ConversationSession {
+  id        String                @id @default(cuid())
+  workspaceId String              @default("legacy")
+  summary   String                @default("")
+  context   Json                  @default("{}")
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  messages  ConversationMessage[]
+  publicWidgetSession PublicWidgetSession?
+  usage     AiUsageRecord[]
+  speechUsage SpeechUsageRecord[]
+  transcriptionUsage TranscriptionUsageRecord[]
+  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model PublicReceptionist {
+  id             String   @id @default(cuid())
+  workspaceId    String   @unique
+  publicKey      String   @unique
+  allowedOrigins String[] @default([])
+  greeting       String   @default("")
+  brandColor     String   @default("#111210")
+  isEnabled      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sessions       PublicWidgetSession[]
+}
+
+model PublicWidgetSession {
+  id                    String              @id @default(cuid())
+  publicReceptionistId  String
+  conversationSessionId String              @unique
+  origin                String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  publicReceptionist    PublicReceptionist  @relation(fields: [publicReceptionistId], references: [id], onDelete: Cascade)
+  conversationSession   ConversationSession @relation(fields: [conversationSessionId], references: [id], onDelete: Cascade)
+
+  @@index([publicReceptionistId, createdAt])
+}
+
+model TranscriptionUsageRecord {
+  id        String              @id @default(cuid())
+  sessionId String?
+  seconds   Int
+  source    String
+  createdAt DateTime            @default(now())
+  session   ConversationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model SpeechUsageRecord {
+  id        String              @id @default(cuid())
+  sessionId String
+  characters Int
+  createdAt DateTime            @default(now())
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([sessionId, createdAt])
+}
+
+enum ConversationRole {
+  USER
+  ASSISTANT
+}
+
+model ConversationMessage {
+  id        String           @id @default(cuid())
+  sessionId String
+  role      ConversationRole
+  content   String
+  createdAt DateTime         @default(now())
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model AiUsageRecord {
+  id           String              @id @default(cuid())
+  sessionId    String
+  model        String
+  promptTokens Int?
+  outputTokens Int?
+  createdAt    DateTime            @default(now())
+  session      ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+enum ReceptionistAction {
+  CREATE_BOOKING
+  UPDATE_BOOKING
+  CANCEL_BOOKING
+}
+
+enum ReceptionistDraftStatus {
+  PENDING_CONFIRMATION
+  EXECUTING
+  EXECUTED
+  EXPIRED
+}
+
+model ReceptionistActionDraft {
+  id        String                   @id @default(cuid())
+  sessionId String
+  action    ReceptionistAction
+  payload   Json
+  status    ReceptionistDraftStatus  @default(PENDING_CONFIRMATION)
+  executionResult Json?
+  expiresAt DateTime
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@index([sessionId, status, expiresAt])
+}

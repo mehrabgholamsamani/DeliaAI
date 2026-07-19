@@ -1,0 +1,10 @@
+<svg width="174" height="48" viewBox="0 0 174 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">DeliaAI</title>
+  <desc id="desc">DeliaAI wordmark with a geometric portal prism.</desc>
+  <rect x="1" y="1" width="46" height="46" rx="14" fill="#121212"/>
+  <path d="M24 8.5L38.2 16.7V31.3L24 39.5L9.8 31.3V16.7L24 8.5Z" stroke="#fff" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M24 15L32.4 19.85V29.55L24 34.4L15.6 29.55V19.85L24 15Z" fill="#fff"/>
+  <path d="M32.4 19.85V29.55L24 34.4V24.7L32.4 19.85Z" fill="#61D39B"/>
+  <path d="M24 15L32.4 19.85L24 24.7L15.6 19.85L24 15Z" fill="#E9FFF2"/>
+  <text x="61" y="32.2" fill="#121212" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="760" letter-spacing="-1.25">DeliaAI</text>
+</svg>
