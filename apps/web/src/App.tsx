@@ -263,21 +263,23 @@ function Layout({ children }: { children: React.ReactNode }) {
   const isWorkspaceRoute = location.pathname.startsWith('/dashboard');
   return (
     <>
-      {!isWorkspaceRoute && <header>
+      {!isWorkspaceRoute && <header className={location.pathname === '/' ? 'site-header landing-header' : 'site-header'}>
         <Link className="brand" to="/">
           <img src="/delia-logo.svg" alt="DeliaAI" />
         </Link>
-        <nav>
-          <NavLink to="/receptionist">See a demo</NavLink>
+        <nav aria-label="Primary navigation">
+          <Link className="landing-nav-link" to="/#product">Product</Link>
+          <Link className="landing-nav-link" to="/#how-it-works">How it works</Link>
+          <NavLink to="/receptionist">Live demo</NavLink>
           <NavLink to="/login">Sign in</NavLink>
           <Link className="button header-cta" to="/signup">
-            Start free
+            Start free <ArrowRight size={14} />
           </Link>
         </nav>
       </header>}
       {children}
       {!isWorkspaceRoute && (
-        <footer>
+        <footer className={location.pathname === '/' ? 'landing-footer' : undefined}>
           <span>Delia</span>
           <span>Clear answers. Confirmed appointments.</span>
         </footer>
@@ -289,90 +291,40 @@ function Layout({ children }: { children: React.ReactNode }) {
 function Home() {
   return (
     <main className="home-page">
-      <section className="hero hero-split">
-        <div className="hero-copy">
-          <p className="eyebrow">A dependable front desk, without the hold music</p>
-          <h1>Every call answered. Every detail captured.</h1>
-          <p>
-            Delia answers the questions your team gets every day, books against real availability,
-            and hands over the conversations that need a human.
-          </p>
-          <div className="actions">
-            <Link className="button" to="/signup">
-              Build your receptionist <ArrowRight size={16} />
-            </Link>
-            <Link className="button secondary" to="/receptionist">
-              Try the live demo
-            </Link>
-          </div>
-          <p className="hero-note">No credit card · Set up with your own services and policies</p>
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <h1>Your best first impression, every single time.</h1>
+          <p className="landing-intro">Delia is the AI receptionist that knows your business, handles the routine, and never lets a valuable customer call disappear into voicemail.</p>
+          <div className="landing-actions"><Link className="landing-primary" to="/signup">Build your Delia <ArrowRight size={17} /></Link><Link className="landing-demo-link" to="/receptionist"><span className="landing-play">›</span> Hear Delia answer</Link></div>
+          <div className="landing-proof"><div className="landing-people" aria-hidden="true"><img src="/receptionists/maya.png" alt="" /><img src="/receptionists/sofia.png" alt="" /><img src="/receptionists/leo.png" alt="" /></div><p><strong>Built for busy teams</strong><br />who would rather be with customers.</p></div>
         </div>
-        <div className="product-glimpse" aria-label="Receptionist product preview">
-          <div className="glimpse-topbar">
-            <span>Delia</span>
-            <span className="live-dot">Live</span>
-          </div>
-          <div className="glimpse-call">
-            <div className="glimpse-avatar">M</div>
-            <div>
-              <strong>Maya is on the line</strong>
-              <span>AI receptionist · Connected</span>
-            </div>
-          </div>
-          <div className="glimpse-message assistant">Good morning, Northstar Dental. How can I help?</div>
-          <div className="glimpse-message caller">Do you have a cleaning after 4pm?</div>
-          <div className="glimpse-message assistant">Yes — Tuesday at 4:30 or Thursday at 5:00.</div>
-          <div className="glimpse-footer">
-            <span>Listening…</span>
-            <span className="sound-bars">▮▮▮▮</span>
-          </div>
+        <div className="landing-stage" aria-label="A preview of a Delia customer call">
+          <div className="stage-spark stage-spark-left" aria-hidden="true">✦</div><div className="stage-spark stage-spark-right" aria-hidden="true">✦</div>
+          <div className="call-card"><div className="call-card-top"><span className="call-card-brand">DELIA <i /></span><span className="call-card-status"><b /> LIVE CALL</span></div><div className="call-card-person"><div className="call-card-avatar"><img src="/receptionists/maya.png" alt="Maya, Delia receptionist" /></div><div><span>AI receptionist</span><h2>Maya</h2></div><button type="button" aria-label="More call options">•••</button></div><div className="call-card-wave" aria-label="Call audio is active"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div><p className="call-card-time">00:42 <span>•</span> Connected</p><div className="call-card-transcript"><span>Maya is taking care of it</span><p>“I have an opening this Thursday at 4:30. Shall I reserve it for you?”</p></div><div className="call-card-actions"><button type="button" aria-label="Mute call"><Mic size={17} /></button><button className="call-card-end" type="button" aria-label="End call"><PhoneCall size={19} /></button><button type="button" aria-label="Open keypad">•••</button></div></div>
+          <div className="stage-note stage-note-top"><CheckCircle2 size={16} /><span><strong>Appointment confirmed</strong><small>Thursday · 4:30 PM</small></span></div><div className="stage-note stage-note-bottom"><MessageSquareText size={16} /><span><strong>Human handoff, when needed</strong><small>With the full conversation attached</small></span></div>
         </div>
       </section>
-      <section className="trust-strip" aria-label="Product safeguards">
-        <span><ShieldCheck /> Answers from your approved information</span>
-        <span><CheckCircle2 /> Confirms before changing a booking</span>
-        <span><PhoneCall /> Hands off with the context attached</span>
+      <section className="landing-logo-line" aria-label="Delia capabilities"><span>Your front desk, reimagined</span><div /><p>Answers questions <b>·</b> Books appointments <b>·</b> Follows up <b>·</b> Keeps your team in sync</p></section>
+      <section className="landing-promise"><div><h2>It sounds like someone<br />who actually works there.</h2></div><p>Give Delia the details you already trust your front desk with: services, policies, openings, and your preferred way of speaking. It turns that knowledge into genuinely useful conversations.</p></section>
+      <section className="landing-features" id="product">
+        <article className="landing-feature landing-feature-dark"><div className="feature-number">01</div><div className="feature-icon"><Headphones /></div><h3>Always warm.<br />Always on.</h3><p>Every caller gets a clear, patient answer — even when your team is in the middle of something important.</p><div className="feature-mini-conversation"><span>Can I ask about your pricing?</span><strong>Of course. Here’s how it works. <i /></strong></div></article>
+        <article className="landing-feature landing-feature-mint"><div className="feature-number">02</div><div className="feature-icon"><CalendarDays /></div><h3>Appointments that<br />actually stick.</h3><p>Delia sees live availability, collects the details, and asks for confirmation before anything changes.</p><div className="feature-calendar"><span>THU</span><strong>24</strong><i /><small>4:30 PM</small></div></article>
+        <article className="landing-feature landing-feature-paper"><div className="feature-number">03</div><div className="feature-icon"><ShieldCheck /></div><h3>Never a black box.</h3><p>Every answer comes from the information you approve. Every handoff arrives with context.</p><div className="feature-checks"><span><CheckCircle2 size={15} /> Your business knowledge</span><span><CheckCircle2 size={15} /> Your booking rules</span><span><CheckCircle2 size={15} /> Your team, in the loop</span></div></article>
       </section>
-      <section className="home-section-heading">
-        <p className="eyebrow">Built for the work behind the call</p>
-        <h2>Useful from the first hello to the final confirmation.</h2>
-      </section>
-      <section className="feature-grid numbered-features">
-        <article>
-          <span>01</span><Mic />
-          <h3>Answers like your front desk</h3>
-          <p>
-            Your services, policies, hours, and preferred tone shape every response.
-          </p>
-        </article>
-        <article>
-          <span>02</span><CalendarDays />
-          <h3>Books with real availability</h3>
-          <p>
-            Delia offers open times, collects contact details, and asks before committing anything.
-          </p>
-        </article>
-        <article>
-          <span>03</span><MessageSquareText />
-          <h3>Keeps your team in the loop</h3>
-          <p>
-            Bookings, customer records, transcripts, and handoffs land in one private workspace.
-          </p>
-        </article>
-      </section>
-      <section className="home-workflow">
-        <div>
-          <p className="eyebrow">A controlled rollout</p>
-          <h2>Teach it. Test it. Then put it in front of customers.</h2>
-          <p>Nothing goes live by accident. Build the knowledge base, make private test calls, and publish when the answers sound right.</p>
-          <Link className="text-link" to="/signup">Start with your business details <ArrowRight size={15} /></Link>
+      <section className="landing-showcase">
+        <div className="landing-showcase-intro"><h2>One conversation.<br />A complete next step.</h2><p>Delia turns the loose ends of a customer call into something your team can use immediately.</p></div>
+        <div className="landing-product-window" aria-label="Delia workspace product preview">
+          <div className="product-window-bar"><div><i /><i /><i /></div><span>delia.ai/workspace</span><b>●</b></div>
+          <div className="product-window-body"><aside><strong><span>◆</span> DELIA</strong><small>WORKSPACE</small><a className="active">⌂ Overview</a><a>◌ Conversations</a><a>□ Bookings</a><a>◇ Knowledge</a><a>⚙ Settings</a><div><span className="product-person-dot">M</span> Northstar Dental</div></aside><main><header><div><p>Tuesday, June 24</p><h3>Your front desk is humming.</h3></div><button type="button">Test Delia <ArrowRight size={14} /></button></header><section className="product-window-stats"><article><span>Calls handled</span><strong>24</strong><small>↑ 18% this week</small></article><article><span>Appointments booked</span><strong>9</strong><small>All confirmed</small></article><article><span>Need attention</span><strong>2</strong><small>Human handoffs</small></article></section><section className="product-window-grid"><article className="product-upcoming"><div className="product-panel-title"><h4>Next appointments</h4><a>View all</a></div><div><time><b>10:30</b><span>AM</span></time><p><strong>Amelia Park</strong><small>Routine cleaning · Dr. Evans</small></p><i /></div><div><time><b>11:15</b><span>AM</span></time><p><strong>Jordan Lee</strong><small>Consultation · Dr. Evans</small></p><i /></div><div><time><b>2:00</b><span>PM</span></time><p><strong>Sam Rivera</strong><small>Follow-up · Dr. Stone</small></p><i /></div></article><article className="product-recent"><div className="product-panel-title"><h4>Just handled</h4><span>LIVE</span></div><div className="product-recent-card"><span className="product-call-icon"><PhoneCall size={15} /></span><div><strong>Appointment confirmed</strong><p>Maya booked Emma for Thursday at 4:30 PM.</p><small>Just now</small></div><CheckCircle2 size={17} /></div><div className="product-recent-card"><span className="product-message-icon"><MessageSquareText size={15} /></span><div><strong>Question resolved</strong><p>Insurance policy shared with Daniel.</p><small>8 min ago</small></div><CheckCircle2 size={17} /></div></article></section></main></div>
         </div>
-        <ol>
-          <li><span>1</span><div><strong>Add the essentials</strong><small>Services, hours, policies, and handoff rules.</small></div></li>
-          <li><span>2</span><div><strong>Call your receptionist</strong><small>Test difficult questions before customers do.</small></div></li>
-          <li><span>3</span><div><strong>Publish with confidence</strong><small>Add Delia to your website when you are ready.</small></div></li>
-        </ol>
       </section>
+      <section className="landing-flow" id="how-it-works"><div className="landing-flow-copy"><h2>In control from<br />day one.</h2><p>There is no mystery prompt and no leap of faith. You shape Delia, test real scenarios privately, and only then invite customers in.</p><Link to="/signup" className="landing-inline-link">See how setup works <ArrowRight size={16} /></Link></div><ol className="landing-steps"><li><span>01</span><div><h3>Tell Delia the essentials</h3><p>Add services, hours, policies, and the details customers ask for every day.</p></div></li><li><span>02</span><div><h3>Try a few difficult calls</h3><p>Test it privately, adjust the answers, and make it sound unmistakably like you.</p></div></li><li><span>03</span><div><h3>Put it to work</h3><p>Share your booking link or add Delia to your website when you are ready.</p></div></li></ol></section>
+      <section className="landing-trust">
+        <div className="landing-trust-intro"><h2>Helpful by default.<br />Careful by design.</h2><p>Delia is made for the practical questions that matter when a customer reaches out.</p></div>
+        <div className="landing-trust-grid"><article><ShieldCheck /><h3>Your information stays yours.</h3><p>Delia answers from the services, policies, and details you choose to provide.</p></article><article><CalendarDays /><h3>Nothing books by accident.</h3><p>Appointments are checked against live availability and confirmed before they are saved.</p></article><article><Headphones /><h3>A human is always in reach.</h3><p>When a conversation needs your team, the handoff includes the context that came before it.</p></article></div>
+      </section>
+      <section className="landing-faq" aria-labelledby="faq-heading"><div><h2 id="faq-heading">Before you hand<br />over the phone.</h2><p>Everything you need to know before your first private test call.</p><Link className="landing-inline-link" to="/receptionist">Try the live demo <ArrowRight size={16} /></Link></div><div className="landing-faq-list"><details open><summary>Does Delia sound like a robot?<span>+</span></summary><p>Delia is configured with your business details and chosen tone, then you can test real conversations before customers ever hear it.</p></details><details><summary>Can I control what Delia says?<span>+</span></summary><p>Yes. You provide the facts it can use: services, policies, hours, handoff rules, and preferred greeting. You can update them whenever your business changes.</p></details><details><summary>What happens when Delia cannot help?<span>+</span></summary><p>It can take a callback request or hand the conversation to your team with the caller’s details and the relevant context attached.</p></details><details><summary>Do I need to install anything first?<span>+</span></summary><p>No. Start by setting up and testing your receptionist privately. When it is ready, you can add the website widget or share a booking link.</p></details></div></section>
+      <section className="landing-closing"><div className="landing-closing-mark" aria-hidden="true">✳</div><h2>Make every call feel<br />like you picked up.</h2><p>Start with the facts. Let Delia handle the first hello.</p><Link className="landing-primary" to="/signup">Start building for free <ArrowRight size={17} /></Link></section>
     </main>
   );
 }
@@ -2082,7 +2034,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
       setStage('confirming');
       setStatus('Please review your contact details and appointment before confirming.');
       void voice.speak(
-        `Please check the details: ${details.name}, ${details.phone}, ${details.email}. ${service.name} is booked for ${formatTime(slot)}. Say yes only if every detail is correct. To correct something, say change my name, phone, or email.`,
+        `Please check the details: ${details.name}, ${details.phone}, ${details.email}. I can book ${service.name} for ${formatTime(slot)} once you confirm. Say yes only if every detail is correct. To correct something, say change my name, phone, or email.`,
         activeSession,
         voice.start
       );

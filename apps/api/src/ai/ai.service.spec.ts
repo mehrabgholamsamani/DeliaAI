@@ -10,7 +10,10 @@ type SafetyRailSubject = {
   ): void;
   executeConversationPlan(
     reply: ReceptionistReply,
-    state: { bookingStatus: 'idle' | 'active' | 'paused' }
+    state: {
+      bookingStatus: 'idle' | 'active' | 'paused';
+      bookingStage?: 'collecting' | 'choosing_time' | 'awaiting_confirmation' | 'completed';
+    }
   ): ReceptionistReply;
 };
 
@@ -50,5 +53,13 @@ describe('AiService safety rails', () => {
       bookingStatus: 'idle'
     });
     expect(planned.plan?.action).toBe('HANDOFF');
+  });
+
+  it('does not reopen availability while a selected time awaits confirmation', () => {
+    const planned = (subject() as unknown as SafetyRailSubject).executeConversationPlan(reply(), {
+      bookingStatus: 'active',
+      bookingStage: 'awaiting_confirmation'
+    });
+    expect(planned.plan?.action).toBe('ANSWER');
   });
 });
