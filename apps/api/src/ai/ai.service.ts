@@ -83,6 +83,9 @@ type ConversationState = {
   wantsEarliest?: boolean;
   bookingRequested?: boolean;
   bookingStatus?: 'idle' | 'active' | 'paused';
+  bookingStage?: 'collecting' | 'choosing_time' | 'awaiting_confirmation' | 'completed';
+  selectedAppointmentAt?: string;
+  activeDraftId?: string;
   personaId?: string;
   lastIntent?: string;
   clarificationCount?: number;
@@ -111,7 +114,6 @@ export class AiService {
     if (!session) throw new ServiceUnavailableException('Conversation session was not found');
     const existingState = this.readConversationState(session.context);
     const persona = receptionistPersonaById(existingState.personaId);
-    if (isFarewell(input.message)) return this.saveClosing(session.id, persona);
     const socialSignal = classifySocialSignal(input.message);
     if (socialSignal)
       return this.saveSocialReply(session.id, input.message, existingState, persona, socialSignal);
@@ -168,7 +170,7 @@ export class AiService {
       .join('\n\n');
     const transcript = history.map((message) => `${message.role}: ${message.content}`).join('\n');
     const serviceList = services.map((service) => `${service.name} (${service.slug})`).join(', ');
-    const prompt = `${RECEPTIONIST_SYSTEM_PROMPT}\nPrompt version: ${RECEPTIONIST_SYSTEM_PROMPT_VERSION}\nBusiness: ${business.businessName}. ${business.companyDescription}\nTimezone: ${business.timezone}. Available services: ${serviceList}.\nReceptionist persona: ${persona.name}; ${persona.personality}. Natural catchphrases: ${persona.catchphrases.join(' ')}. Stay in this persona for the whole call; use a catchphrase occasionally, not in every answer.\nGreeting: ${business.greeting}\nTone: ${business.assistantTone}\nBooking instructions: ${business.bookingInstructions}\nHandoff instructions: ${business.handoffInstructions}\nContact details: ${business.contactDetails || '(not configured)'}\n\nApproved knowledge only:\n${context}\n\nCompact conversation state: ${JSON.stringify(conversationState)}\nConversation summary: ${session.summary || '(none)'}\nRecent transcript:\n${transcript}\n\nUser message: ${input.message}\n\nReturn only JSON following the requested schema. Keep spokenText concise: normally one or two natural sentences, then one focused follow-up question when needed. Never claim booking changes are complete. Booking status is authoritative: if it is paused, answer the caller's new request without asking for booking details; only resume when they ask to continue or make a new booking request. For booking requests with active status, use the compact state, never ask for a detail already known, and ask for only the next missing detail. Populate bookingDetails with every known name, email, phone, serviceQuery, and wantsEarliest value. Set readyToReview only after the visitor explicitly confirms the collected details. Set plan.action to the best next conversational action and plan.confidence honestly. The backend validates the plan and is the only component allowed to perform booking mutations. If no approved answer exists, the visitor asks for a person, or confidence is low, use handoff or clarify and invite them to request a callback. Cite only the provided article slugs.`;
+    const prompt = `${RECEPTIONIST_SYSTEM_PROMPT}\nPrompt version: ${RECEPTIONIST_SYSTEM_PROMPT_VERSION}\nBusiness: ${business.businessName}. ${business.companyDescription}\nTimezone: ${business.timezone}. Available services: ${serviceList}.\nReceptionist persona: ${persona.name}; ${persona.personality}. Natural catchphrases: ${persona.catchphrases.join(' ')}. Stay in this persona for the whole call; use a catchphrase occasionally, not in every answer.\nGreeting: ${business.greeting}\nTone: ${business.assistantTone}\nBooking instructions: ${business.bookingInstructions}\nHandoff instructions: ${business.handoffInstructions}\nContact details: ${business.contactDetails || '(not configured)'}\n\nCall-closing policy: endCall is reserved for a clear farewell, or a caller declining further help after a completed booking. If bookingStage is awaiting_confirmation, a refusal normally means they are declining or changing that booking, not ending the call. If their wording is ambiguous, keep the call open and ask one brief clarifying question.\n\nApproved knowledge only:\n${context}\n\nCompact conversation state: ${JSON.stringify(conversationState)}\nConversation summary: ${session.summary || '(none)'}\nRecent transcript:\n${transcript}\n\nUser message: ${input.message}\n\nReturn only JSON following the requested schema. Keep spokenText concise: normally one or two natural sentences, then one focused follow-up question when needed. Never claim booking changes are complete. Booking status is authoritative: if it is paused, answer the caller's new request without asking for booking details; only resume when they ask to continue or make a new booking request. For booking requests with active status, use the compact state, never ask for a detail already known, and ask for only the next missing detail. Populate bookingDetails with every known name, email, phone, serviceQuery, and wantsEarliest value. Set readyToReview only after the visitor explicitly confirms the collected details. Set plan.action to the best next conversational action and plan.confidence honestly. The backend validates the plan and is the only component allowed to perform booking mutations. If no approved answer exists, the visitor asks for a person, or confidence is low, use handoff or clarify and invite them to request a callback. Cite only the provided article slugs.`;
     try {
       const { response, generatedReply } = await this.generateStructuredReply(apiKey, prompt);
       const plannedReply = this.executeConversationPlan(generatedReply, conversationState);
@@ -365,26 +367,6 @@ export class AiService {
     return { sessionId, reply };
   }
 
-  private async saveClosing(sessionId: string, persona: ReceptionistPersona) {
-    const business = await this.crm.getBusiness();
-    const message = `Thanks for calling ${business.businessName}. ${persona.catchphrases[0]} Take care, and goodbye.`;
-    const reply: ReceptionistReply = {
-      spokenText: message,
-      displayText: message,
-      intent: 'question',
-      suggestedActions: [],
-      requiresConfirmation: false,
-      endCall: true,
-      plan: { action: 'ANSWER', confidence: 'high', workflowStatus: 'idle' },
-      citedKnowledgeIds: [],
-      receptionist: { id: persona.id, name: persona.name }
-    };
-    await this.prisma.conversationMessage.create({
-      data: { sessionId, role: ConversationRole.ASSISTANT, content: message }
-    });
-    return { sessionId, reply };
-  }
-
   private async saveSocialReply(
     sessionId: string,
     input: string,
@@ -484,6 +466,16 @@ export class AiService {
       source.bookingStatus === 'paused'
         ? { bookingStatus: source.bookingStatus }
         : {}),
+      ...(source.bookingStage === 'collecting' ||
+      source.bookingStage === 'choosing_time' ||
+      source.bookingStage === 'awaiting_confirmation' ||
+      source.bookingStage === 'completed'
+        ? { bookingStage: source.bookingStage }
+        : {}),
+      ...(typeof source.selectedAppointmentAt === 'string'
+        ? { selectedAppointmentAt: source.selectedAppointmentAt }
+        : {}),
+      ...(typeof source.activeDraftId === 'string' ? { activeDraftId: source.activeDraftId } : {}),
       ...(typeof source.personaId === 'string' ? { personaId: source.personaId } : {}),
       ...(typeof source.lastIntent === 'string' ? { lastIntent: source.lastIntent } : {}),
       ...(typeof source.clarificationCount === 'number'
@@ -508,6 +500,10 @@ export class AiService {
       ...(state.personaId ? { personaId: state.personaId } : {}),
       bookingStatus: reply.plan?.workflowStatus || state.bookingStatus || 'idle',
       bookingRequested: (reply.plan?.workflowStatus || state.bookingStatus) === 'active',
+      bookingStage:
+        reply.plan?.workflowStatus === 'paused'
+          ? state.bookingStage
+          : state.bookingStage || (reply.intent === 'booking' ? 'collecting' : undefined),
       lastIntent: reply.intent,
       clarificationCount
     };
@@ -517,7 +513,12 @@ export class AiService {
     reply: ReceptionistReply,
     state: ConversationState
   ): ReceptionistReply {
-    if (state.bookingStatus !== 'active') return reply;
+    if (
+      state.bookingStatus !== 'active' ||
+      state.bookingStage === 'awaiting_confirmation' ||
+      state.bookingStage === 'completed'
+    )
+      return reply;
     const bookingDetails = {
       ...reply.bookingDetails,
       ...(state.name ? { name: state.name } : {}),
@@ -554,7 +555,7 @@ export class AiService {
     else if (reply.intent === 'cancel_booking' || reply.intent === 'update_booking') action = 'HANDOFF';
     else if (status === 'paused') action = reply.intent === 'unknown' ? 'CLARIFY' : 'ANSWER';
     else if (hasNewContact) action = 'CORRECT_CONTACT';
-    else if (status === 'active')
+    else if (status === 'active' && state.bookingStage !== 'awaiting_confirmation')
       action =
         state.name && state.email && state.phone ? 'OFFER_AVAILABILITY' : 'COLLECT_BOOKING_DETAILS';
     else if (reply.intent === 'unknown' || reply.plan?.confidence === 'low') action = 'CLARIFY';
@@ -567,12 +568,6 @@ export class AiService {
       }
     };
   }
-}
-
-function isFarewell(message: string) {
-  return /\b(?:goodbye|bye(?:\s+bye)?|that(?:'s| is) all|that's it|no,? thank you|no thanks|have a (?:good|nice) day)\b/i.test(
-    message
-  );
 }
 
 function extractContactDetails(

@@ -25,12 +25,11 @@ export class ReceptionistWorkflowService {
   ) {}
 
   async prepare(input: PrepareInput, workspaceId = 'legacy') {
-    const session = await this.prisma.conversationSession.findUnique({
-      where: { id: input.sessionId },
-      select: { id: true }
+    const session = await this.prisma.conversationSession.findFirst({
+      where: { id: input.sessionId, workspaceId },
+      select: { id: true, context: true }
     });
-    const ownedSession = session && await this.prisma.conversationSession.findFirst({ where: { id: session.id, workspaceId }, select: { id: true } });
-    if (!ownedSession) throw new NotFoundException('Conversation session was not found');
+    if (!session) throw new NotFoundException('Conversation session was not found');
     const action = input.action as ReceptionistAction;
     const graph = new StateGraph(DraftState)
       .addNode('persist_draft', async (state) => {
@@ -54,6 +53,20 @@ export class ReceptionistWorkflowService {
       sessionId: input.sessionId,
       action,
       payload: input.payload
+    });
+    await this.prisma.conversationSession.update({
+      where: { id: session.id },
+      data: {
+        context: {
+          ...conversationContext(session.context),
+          bookingStatus: 'active',
+          bookingStage: 'awaiting_confirmation',
+          activeDraftId: result.draftId,
+          ...('appointmentAt' in input.payload && typeof input.payload.appointmentAt === 'string'
+            ? { selectedAppointmentAt: input.payload.appointmentAt }
+            : {})
+        } as Prisma.InputJsonValue
+      }
     });
     await this.prisma.auditLog.create({
       data: {
@@ -83,7 +96,7 @@ export class ReceptionistWorkflowService {
     if (!draft) throw new NotFoundException('The confirmation request is invalid or expired');
     const session = await this.prisma.conversationSession.findFirst({
       where: { id: draft.sessionId, workspaceId },
-      select: { id: true }
+      select: { id: true, context: true }
     });
     if (!session) throw new NotFoundException('The confirmation request is invalid or expired');
     if (draft.status === ReceptionistDraftStatus.EXECUTED && draft.executionResult)
@@ -134,6 +147,17 @@ export class ReceptionistWorkflowService {
           executionResult: result as Prisma.InputJsonValue
         }
       }),
+      this.prisma.conversationSession.update({
+        where: { id: session.id },
+        data: {
+          context: {
+            ...conversationContext(session.context),
+            bookingStatus: 'idle',
+            bookingStage: 'completed',
+            activeDraftId: null
+          } as Prisma.InputJsonValue
+        }
+      }),
       this.prisma.auditLog.create({
         data: {
           action: 'receptionist.draft.execute',
@@ -155,4 +179,10 @@ export class ReceptionistWorkflowService {
       return `Please confirm: update the booking to ${(payload as { appointmentAt: string }).appointmentAt}.`;
     return 'Please confirm: cancel this booking.';
   }
+}
+
+function conversationContext(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
