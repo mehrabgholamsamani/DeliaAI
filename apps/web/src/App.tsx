@@ -25,8 +25,11 @@ import {
   PhoneCall,
   Send,
   Settings2,
-  ShieldCheck
+  ShieldCheck,
+  Volume2,
+  X
 } from 'lucide-react';
+import { PremiumAuth } from '@/components/ui/premium-auth';
 import {
   cancelManagedBooking,
   cancelWorkspaceCrmBooking,
@@ -50,6 +53,7 @@ import {
   getManagedBooking,
   getWorkspace,
   getWorkspaceKnowledge,
+  getWorkspaceKnowledgeDocuments,
   getWorkspaceCrmBookings,
   getWorkspaceCrmCustomers,
   getWorkspaceWidget,
@@ -70,6 +74,10 @@ import {
   saveWorkspaceSettings,
   saveReceptionistSettings,
   saveWorkspaceKnowledge,
+  uploadWorkspaceKnowledgeDocument,
+  updateWorkspaceKnowledgeDocument,
+  deleteWorkspaceKnowledgeDocument,
+  reindexWorkspaceKnowledgeDocument,
   saveWorkspaceService,
   saveWorkspaceWidget,
   signUp,
@@ -82,6 +90,7 @@ import {
   type BookingDraft,
   type Account,
   type KnowledgeArticle,
+  type KnowledgeDocument,
   type ReceptionistSettings,
   type ReceptionistReply,
   type OnboardingBusiness,
@@ -89,11 +98,12 @@ import {
   type WorkspaceSettings,
   type WidgetSettings,
   type WidgetTranscript,
-  updateManagedBooking
-  ,updateWorkspaceCrmBooking
+  updateManagedBooking,
+  updateWorkspaceCrmBooking
 } from './api';
 import './styles.css';
 import { useVoiceReceptionist } from './hooks/useVoiceReceptionist';
+import ButtonWithIcon from '@/components/ui/button-with-icon';
 
 const today = new Date().toISOString().slice(0, 10);
 const tonePresets = [
@@ -182,7 +192,7 @@ function trackUxEvent(name: string, properties: Record<string, string | number |
   const event = { name, properties, at: new Date().toISOString() };
   window.dispatchEvent(new CustomEvent('delia:ux-event', { detail: event }));
   const key = 'delia:ux-events';
-  const history = JSON.parse(window.sessionStorage.getItem(key) || '[]') as typeof event[];
+  const history = JSON.parse(window.sessionStorage.getItem(key) || '[]') as (typeof event)[];
   window.sessionStorage.setItem(key, JSON.stringify([...history.slice(-49), event]));
 }
 
@@ -258,73 +268,998 @@ function playHangUpSound() {
   window.setTimeout(() => void context.close(), 320);
 }
 
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.91h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.4Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.37l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.39 13.92A6.01 6.01 0 0 1 6.08 12c0-.67.11-1.32.31-1.92V7.46H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.54l3.35-2.62Z" />
+      <path fill="#EA4335" d="M12 5.95c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.46l3.35 2.62C7.18 7.71 9.39 5.95 12 5.95Z" />
+    </svg>
+  );
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isWorkspaceRoute = location.pathname.startsWith('/dashboard');
+  const usesMarketingChrome = ['/', '/login', '/signup'].includes(location.pathname);
   return (
     <>
-      {!isWorkspaceRoute && <header className={location.pathname === '/' ? 'site-header landing-header' : 'site-header'}>
-        <Link className="brand" to="/">
-          <img src="/delia-logo.svg" alt="DeliaAI" />
-        </Link>
-        <nav aria-label="Primary navigation">
-          <Link className="landing-nav-link" to="/#product">Product</Link>
-          <Link className="landing-nav-link" to="/#how-it-works">How it works</Link>
-          <NavLink to="/receptionist">Live demo</NavLink>
-          <NavLink to="/login">Sign in</NavLink>
-          <Link className="button header-cta" to="/signup">
-            Start free <ArrowRight size={14} />
+      {!isWorkspaceRoute && !['/login', '/signup'].includes(location.pathname) && (
+        <header
+          className={location.pathname === '/' ? 'site-header landing-header' : 'site-header'}
+        >
+          <Link className="brand" to="/">
+            <img src="/delia-logo.svg" alt="DeliaAI" />
           </Link>
-        </nav>
-      </header>}
-      {children}
-      {!isWorkspaceRoute && (
-        <footer className={location.pathname === '/' ? 'landing-footer' : undefined}>
-          <span>Delia</span>
-          <span>Clear answers. Confirmed appointments.</span>
-        </footer>
+          <nav aria-label="Primary navigation">
+            <Link className="landing-nav-link" to="/#product">
+              Product
+            </Link>
+            <Link className="landing-nav-link" to="/#how-it-works">
+              How it works
+            </Link>
+            <NavLink to="/receptionist">Live demo</NavLink>
+            <NavLink to="/login">Sign in</NavLink>
+            <Link className="button header-cta" to="/signup">
+              Start free <ArrowRight size={14} />
+            </Link>
+          </nav>
+        </header>
       )}
+      {children}
+      {!isWorkspaceRoute &&
+        (usesMarketingChrome ? (
+          <footer className="landing-footer">
+            <div className="landing-footer-main">
+              <Link className="landing-footer-brand" to="/" aria-label="Delia home">
+                <img src="/delia-logo.svg" alt="Delia" />
+              </Link>
+              <div className="landing-footer-column">
+                <span>Explore</span>
+                <Link to="/#product">Product</Link>
+                <Link to="/#how-it-works">How it works</Link>
+                <Link to="/receptionist">Live demo</Link>
+              </div>
+              <div className="landing-footer-column">
+                <span>Company</span>
+                <Link to="/login">Sign in</Link>
+                <Link to="/signup">Create account</Link>
+                <a href="mailto:hello@delia.ai">Contact</a>
+              </div>
+              <div className="landing-footer-column">
+                <span>Product</span>
+                <Link to="/signup">AI receptionist</Link>
+                <Link to="/signup">Bookings</Link>
+                <Link to="/signup">Website widget</Link>
+              </div>
+            </div>
+            <div className="landing-footer-bottom">
+              <div>
+                <a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#cookies">Cookies</a>
+              </div>
+              <span>© 2026 Delia. All rights reserved.</span>
+            </div>
+          </footer>
+        ) : (
+          <footer><span>Delia</span><span>Clear answers. Confirmed appointments.</span></footer>
+        ))}
     </>
   );
 }
 
+const landingReceptionists = [
+  { name: 'Maya', description: 'Warm and polished, American English', image: '/receptionists/maya.png' },
+  { name: 'Sofia', description: 'Bright and welcoming, American English', image: '/receptionists/sofia.png' },
+  { name: 'Leo', description: 'Calm and confident, British English', image: '/receptionists/leo.png' },
+  { name: 'John', description: 'Friendly and direct, Australian English', image: '/receptionists/john.png' }
+];
+
+function LiquidWebGLCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true });
+    if (!gl) return;
+
+    const vertexSource = `
+      attribute vec2 aPosition;
+      varying vec2 vUv;
+      void main() {
+        vUv = aPosition * .5 + .5;
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }
+    `;
+    const fragmentSource = `
+      precision highp float;
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform vec2 uPointer;
+      uniform vec2 uResolution;
+
+      mat3 rotateX(float a) { float c=cos(a),s=sin(a); return mat3(1.,0.,0.,0.,c,-s,0.,s,c); }
+      mat3 rotateY(float a) { float c=cos(a),s=sin(a); return mat3(c,0.,s,0.,1.,0.,-s,0.,c); }
+      mat3 rotateZ(float a) { float c=cos(a),s=sin(a); return mat3(c,-s,0.,s,c,0.,0.,0.,1.); }
+
+      void main() {
+        vec2 p = vUv * 2.0 - 1.0;
+        p.x *= uResolution.x / uResolution.y;
+        float radius = .92;
+        float d = dot(p,p) / (radius*radius);
+        if (d > 1.0) discard;
+        float z = sqrt(max(0.0,1.0-d));
+        vec3 normal = normalize(vec3(p/radius,z));
+        float time = uTime * .48;
+        float yRotation = time + uPointer.x*.32;
+        float naturalPitch = sin(time*.42)*.09-uPointer.y*.18;
+        float naturalRoll = sin(time*.3)*.035;
+        mat3 rotation = rotateY(yRotation) * rotateX(naturalPitch) * rotateZ(naturalRoll);
+        vec3 n = rotation * normal;
+        vec3 viewDir = vec3(0.,0.,1.);
+        vec3 lightDir = normalize(vec3(-.45+uPointer.x*.4,.65-uPointer.y*.3,.8));
+        float diffuse = max(dot(normal,lightDir),0.0);
+        float specular = pow(max(dot(reflect(-lightDir,normal),viewDir),0.0),42.0);
+        float fresnel = pow(1.0-max(dot(normal,viewDir),0.0),2.7);
+
+        vec3 sky = vec3(.55,.80,.93);
+        vec3 mint = vec3(.58,.94,.82);
+        vec3 lime = vec3(.79,1.0,.40);
+        vec3 pearl = vec3(.96,1.0,.99);
+        float vertical = n.y*.5+.5;
+        vec3 environment = mix(sky,mint,smoothstep(.12,.72,vertical));
+        environment = mix(environment,lime,smoothstep(.7,.98,n.y*.55+n.x*.35+.42));
+        float bandA = smoothstep(.72,.96,sin(n.x*8.0+n.y*5.0+time*1.4)*.5+.5);
+        float bandB = smoothstep(.78,.98,cos(n.y*9.0-n.z*5.0-time)*.5+.5);
+        float longitude = atan(n.z,n.x);
+        float meridian = sin(longitude*3.0+n.y*1.8)*.5+.5;
+        float movingSeam = smoothstep(.76,.96,meridian);
+        float farSide = smoothstep(-.55,.35,n.z);
+        vec3 color = mix(environment,pearl,.25+diffuse*.38);
+        color += pearl*bandA*.28 + sky*bandB*.16;
+        color *= .88+farSide*.12;
+        color += mix(mint,pearl,.58)*movingSeam*.24;
+        color += vec3(1.)*specular*.9;
+        color = mix(color,pearl,fresnel*.68);
+        float edge = smoothstep(1.0,.92,d);
+        gl_FragColor = vec4(color,edge*.78);
+      }
+    `;
+
+    const compile = (type: number, source: string) => {
+      const shader = gl.createShader(type);
+      if (!shader) return null;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    };
+    const vertex = compile(gl.VERTEX_SHADER, vertexSource);
+    const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource);
+    if (!vertex || !fragment) return;
+    const program = gl.createProgram();
+    if (!program) return;
+    gl.attachShader(program, vertex);
+    gl.attachShader(program, fragment);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    gl.useProgram(program);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
+    const position = gl.getAttribLocation(program, 'aPosition');
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+    const timeLocation = gl.getUniformLocation(program, 'uTime');
+    const pointerLocation = gl.getUniformLocation(program, 'uPointer');
+    const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
+    const pointer = { x: 0, y: 0 };
+    const target = { x: 0, y: 0 };
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const move = (event: PointerEvent) => {
+      const bounds = canvas.getBoundingClientRect();
+      target.x = ((event.clientX - bounds.left) / bounds.width - .5) * 2;
+      target.y = ((event.clientY - bounds.top) / bounds.height - .5) * 2;
+    };
+    window.addEventListener('pointermove', move, { passive: true });
+    const resize = () => {
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+      const width = Math.max(1, Math.floor(canvas.clientWidth * ratio));
+      const height = Math.max(1, Math.floor(canvas.clientHeight * ratio));
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+      gl.viewport(0, 0, width, height);
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+    let animation = 0;
+    const start = performance.now();
+    const draw = (now: number) => {
+      pointer.x += (target.x-pointer.x)*.055;
+      pointer.y += (target.y-pointer.y)*.055;
+      resize();
+      gl.uniform1f(timeLocation, reducedMotion ? 0 : (now-start)/1000);
+      gl.uniform2f(pointerLocation,pointer.x,pointer.y);
+      gl.uniform2f(resolutionLocation,canvas.width,canvas.height);
+      gl.clearColor(0,0,0,0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES,0,6);
+      animation = window.requestAnimationFrame(draw);
+    };
+    animation = window.requestAnimationFrame(draw);
+    return () => {
+      window.cancelAnimationFrame(animation);
+      window.removeEventListener('pointermove', move);
+      observer.disconnect();
+      gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
+      gl.deleteShader(vertex);
+      gl.deleteShader(fragment);
+    };
+  }, []);
+
+  return <canvas className="liquid-webgl-canvas" ref={canvasRef} aria-hidden="true" />;
+}
+
+function LandingVoiceDemo() {
+  const orbLightRef = useRef<SVGFEPointLightElement>(null);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [inCall, setInCall] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [muted, setMuted] = useState(false);
+  const [speaker, setSpeaker] = useState(true);
+  const receptionist = landingReceptionists[selected];
+
+  useEffect(() => {
+    if (!inCall) return;
+    const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [inCall]);
+
+  const startCall = () => {
+    setSeconds(0);
+    setInCall(true);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const greeting = new SpeechSynthesisUtterance(
+        `Hi, I'm ${receptionist.name}, your Delia receptionist. How can I help today?`
+      );
+      greeting.rate = 0.96;
+      window.speechSynthesis.speak(greeting);
+    }
+  };
+
+  const closeDemo = () => {
+    window.speechSynthesis?.cancel();
+    setOpen(false);
+    setInCall(false);
+    setSeconds(0);
+  };
+
+  const moveOrb = (event: React.MouseEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - bounds.left;
+    const y = event.clientY - bounds.top;
+    const normalizedX = x / bounds.width - 0.5;
+    const normalizedY = y / bounds.height - 0.5;
+    event.currentTarget.style.setProperty('--orb-x', `${x}px`);
+    event.currentTarget.style.setProperty('--orb-y', `${y}px`);
+    event.currentTarget.style.setProperty('--orb-rotate-x', `${normalizedY * -12}deg`);
+    event.currentTarget.style.setProperty('--orb-rotate-y', `${normalizedX * 14}deg`);
+    event.currentTarget.style.setProperty('--orb-light-x', `${36 + normalizedX * 24}%`);
+    event.currentTarget.style.setProperty('--orb-light-y', `${24 + normalizedY * 20}%`);
+    event.currentTarget.style.setProperty('--orb-light-shift-x', `${normalizedX * 28}px`);
+    event.currentTarget.style.setProperty('--orb-light-shift-y', `${normalizedY * 22}px`);
+    event.currentTarget.style.setProperty('--orb-inner-x', `${normalizedX * -10}px`);
+    event.currentTarget.style.setProperty('--orb-inner-y', `${normalizedY * -8}px`);
+    event.currentTarget.style.setProperty('--orb-depth-x', `${normalizedX * -4}px`);
+    event.currentTarget.style.setProperty('--orb-depth-y', `${normalizedY * -3}px`);
+    event.currentTarget.style.setProperty('--orb-surface-x', `${normalizedX * 3}px`);
+    event.currentTarget.style.setProperty('--orb-surface-y', `${normalizedY * 2}px`);
+    orbLightRef.current?.setAttribute('x', String(300 + normalizedX * 260));
+    orbLightRef.current?.setAttribute('y', String(110 + normalizedY * 220));
+  };
+
+  const resetOrb = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.currentTarget.style.setProperty('--orb-rotate-x', '0deg');
+    event.currentTarget.style.setProperty('--orb-rotate-y', '0deg');
+    event.currentTarget.style.setProperty('--orb-light-x', '36%');
+    event.currentTarget.style.setProperty('--orb-light-y', '24%');
+    event.currentTarget.style.setProperty('--orb-light-shift-x', '0px');
+    event.currentTarget.style.setProperty('--orb-light-shift-y', '0px');
+    event.currentTarget.style.setProperty('--orb-inner-x', '0px');
+    event.currentTarget.style.setProperty('--orb-inner-y', '0px');
+    event.currentTarget.style.setProperty('--orb-depth-x', '0px');
+    event.currentTarget.style.setProperty('--orb-depth-y', '0px');
+    event.currentTarget.style.setProperty('--orb-surface-x', '0px');
+    event.currentTarget.style.setProperty('--orb-surface-y', '0px');
+    orbLightRef.current?.setAttribute('x', '300');
+    orbLightRef.current?.setAttribute('y', '110');
+  };
+
+  return (
+    <section className="landing-voice-demo" id="how-it-works">
+      <div className="voice-demo-copy">
+        <p className="landing-kicker">Try Delia live</p>
+        <h2>A receptionist you can actually talk to.</h2>
+        <p>Choose a voice, start a call, and experience how naturally Delia welcomes a new customer.</p>
+      </div>
+      <div className="voice-orb-stage" onMouseMove={moveOrb} onMouseLeave={resetOrb}>
+        <button className="voice-liquid-orb" type="button" onClick={() => setOpen(true)} aria-label="Open the Delia voice demo">
+          <svg className="liquid-metal-svg" viewBox="0 0 600 600" aria-hidden="true">
+            <defs>
+              <linearGradient id="liquid-metal-base" x1="12%" y1="5%" x2="88%" y2="94%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="15%" stopColor="#f5ffdc" />
+                <stop offset="31%" stopColor="#bdf3df" />
+                <stop offset="48%" stopColor="#8ec9e5" />
+                <stop offset="61%" stopColor="#d8fbf0" />
+                <stop offset="75%" stopColor="#fbffff" />
+                <stop offset="89%" stopColor="#acd9e8" />
+                <stop offset="100%" stopColor="#e1ffac" />
+              </linearGradient>
+              <radialGradient id="liquid-metal-glow" cx="34%" cy="22%" r="68%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity=".98" />
+                <stop offset="28%" stopColor="#ffffff" stopOpacity=".34" />
+                <stop offset="62%" stopColor="#92cfee" stopOpacity=".08" />
+                <stop offset="100%" stopColor="#091216" stopOpacity=".48" />
+              </radialGradient>
+              <filter id="liquid-metal-surface" x="-25%" y="-25%" width="150%" height="150%">
+                <feTurbulence type="fractalNoise" baseFrequency=".009 .013" numOctaves="2" seed="8" result="noise">
+                  <animate attributeName="baseFrequency" dur="10s" values=".009 .013;.014 .009;.008 .015;.009 .013" repeatCount="indefinite" />
+                </feTurbulence>
+                <feGaussianBlur in="noise" stdDeviation="7" result="softNoise" />
+                <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="18" xChannelSelector="R" yChannelSelector="B">
+                  <animate attributeName="scale" dur="10s" values="14;20;16;14" repeatCount="indefinite" />
+                </feDisplacementMap>
+              </filter>
+              <filter id="liquid-soft-blur"><feGaussianBlur stdDeviation="18" /></filter>
+              <filter id="liquid-volume-light" x="-30%" y="-30%" width="160%" height="160%" colorInterpolationFilters="sRGB">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="13" result="softAlpha" />
+                <feDiffuseLighting in="softAlpha" surfaceScale="22" diffuseConstant="1.05" lightingColor="#bdeeff" result="diffuse">
+                  <feDistantLight azimuth="225" elevation="48" />
+                </feDiffuseLighting>
+                <feSpecularLighting in="softAlpha" surfaceScale="30" specularConstant="1.25" specularExponent="28" lightingColor="#ffffff" result="specular">
+                  <fePointLight ref={orbLightRef} x="300" y="110" z="240" />
+                </feSpecularLighting>
+                <feComposite in="specular" in2="SourceAlpha" operator="in" result="clippedSpecular" />
+                <feBlend in="SourceGraphic" in2="diffuse" mode="soft-light" result="litSurface" />
+                <feBlend in="litSurface" in2="clippedSpecular" mode="screen" />
+              </filter>
+            </defs>
+            <ellipse className="liquid-contact-shadow" cx="300" cy="520" rx="190" ry="34" filter="url(#liquid-soft-blur)" />
+            <g filter="url(#liquid-metal-surface)">
+              <path className="liquid-metal-body" d="M302 53C405 50 510 119 543 226C574 326 540 451 451 516C363 580 221 556 132 483C42 410 47 271 99 168C143 80 212 57 302 53Z" fill="url(#liquid-metal-base)" filter="url(#liquid-volume-light)" />
+              <ellipse className="liquid-inner-shell" cx="315" cy="306" rx="207" ry="198" />
+              <path className="liquid-underside" d="M104 370C170 505 355 568 494 446C451 540 340 574 231 541C155 518 111 454 104 370Z" />
+              <path className="liquid-metal-overlay" d="M302 53C405 50 510 119 543 226C574 326 540 451 451 516C363 580 221 556 132 483C42 410 47 271 99 168C143 80 212 57 302 53Z" fill="url(#liquid-metal-glow)" />
+            </g>
+            <path className="liquid-reflection-band" d="M105 217C176 93 349 68 489 172C402 144 322 169 254 222C195 267 145 267 105 217Z" />
+            <ellipse className="liquid-specular" cx="222" cy="145" rx="116" ry="48" />
+            <path className="liquid-rim" d="M116 420C201 532 375 560 492 449" />
+          </svg>
+          <LiquidWebGLCanvas />
+        </button>
+        <button className="voice-orb-cta" type="button" onClick={() => setOpen(true)}>
+          <span><strong>Talk to Delia</strong></span>
+          <i><PhoneCall size={24} /></i>
+        </button>
+      </div>
+      {open && (
+        <div className="voice-demo-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeDemo()}>
+          <section className="voice-demo-modal" role="dialog" aria-modal="true" aria-labelledby="voice-demo-title">
+            <button className="voice-demo-close" type="button" onClick={closeDemo} aria-label="Close demo"><X /></button>
+            {!inCall ? (
+              <>
+                <h2 id="voice-demo-title">Choose your receptionist</h2>
+                <div className="voice-options">
+                  {landingReceptionists.map((option, index) => (
+                    <button className={selected === index ? 'selected' : ''} type="button" key={option.name} onClick={() => setSelected(index)}>
+                      <img src={option.image} alt="" />
+                      <span><strong>{option.name}</strong><small>{option.description}</small></span>
+                      <i>{selected === index ? 'Selected' : 'Choose'}</i>
+                    </button>
+                  ))}
+                </div>
+                <button className="voice-start-call" type="button" onClick={startCall}>Start call</button>
+                <p className="voice-privacy">This browser demo uses your device audio controls. No call recording is stored.</p>
+              </>
+            ) : (
+              <div className="voice-call-active">
+                <img src={receptionist.image} alt="" />
+                <span className="voice-live-label">Live with {receptionist.name}</span>
+                <h2 id="voice-demo-title">Hi, how can I help today?</h2>
+                <p>Ask me about services, availability, or booking an appointment.</p>
+                <div className="voice-call-wave" aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>
+                <time>{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</time>
+                <div className="voice-call-controls">
+                  <button className={!speaker ? 'off' : ''} type="button" onClick={() => setSpeaker((value) => !value)} aria-label="Toggle speaker"><Volume2 /></button>
+                  <button className="hangup" type="button" onClick={closeDemo} aria-label="End call"><PhoneCall /></button>
+                  <button className={muted ? 'off' : ''} type="button" onClick={() => setMuted((value) => !value)} aria-label="Toggle microphone"><Mic /></button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const landingStatement =
+  'Service teams use Delia to turn every customer conversation into a clear next step, bringing calls, bookings, customer details and human handoffs into one intelligent front desk that gets better with every interaction.';
+
+function ScrollRevealStatement() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [progress, setProgress] = useState(0);
+  const words = landingStatement.split(' ');
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const section = sectionRef.current;
+        if (!section) return;
+        const rect = section.getBoundingClientRect();
+        const start = window.innerHeight * 0.86;
+        const finish = window.innerHeight * 0.08;
+        setProgress(Math.max(0, Math.min(1, (start - rect.top) / (start - finish))));
+      });
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  return (
+    <section className="landing-scroll-statement" ref={sectionRef} aria-label={landingStatement}>
+      <p aria-hidden="true">
+        {words.map((word, index) => {
+          const wordStart = (index / words.length) * 0.82;
+          const strength = Math.max(0, Math.min(1, (progress - wordStart) * words.length * 0.22));
+          return (
+            <span
+              key={`${word}-${index}`}
+              style={{ '--word-strength': strength } as React.CSSProperties}
+            >
+              {word}{' '}
+            </span>
+          );
+        })}
+      </p>
+    </section>
+  );
+}
+
+type PreviewTab = 'Overview' | 'Conversations' | 'Bookings' | 'Knowledge' | 'Settings';
+
+function LandingDashboardPreview() {
+  const [tab, setTab] = useState<PreviewTab>('Overview');
+  const tabs: Array<{ name: PreviewTab; icon: React.ReactNode }> = [
+    { name: 'Overview', icon: <LayoutDashboard size={14} /> },
+    { name: 'Conversations', icon: <MessageSquareText size={14} /> },
+    { name: 'Bookings', icon: <CalendarDays size={14} /> },
+    { name: 'Knowledge', icon: <BookOpen size={14} /> },
+    { name: 'Settings', icon: <Settings2 size={14} /> }
+  ];
+
+  return (
+    <div className="landing-product-window landing-dashboard-demo" aria-label="Interactive Delia workspace preview">
+      <div className="product-window-bar">
+        <div><i /><i /><i /></div>
+        <span>delia.ai/workspace</span>
+        <b>●</b>
+      </div>
+      <div className="product-window-body">
+        <aside>
+          <strong><span>◆</span> DELIA</strong>
+          <small>WORKSPACE</small>
+          {tabs.map((item) => (
+            <button className={tab === item.name ? 'active' : ''} type="button" key={item.name} onClick={() => setTab(item.name)}>
+              {item.icon}<span>{item.name}</span>
+            </button>
+          ))}
+          <div><span className="product-person-dot">N</span> Northstar Dental</div>
+        </aside>
+        <main className="preview-tab-panel" key={tab}>
+          <header>
+            <div><p>Tuesday, June 24</p><h3>{tab === 'Overview' ? 'Your front desk is humming.' : tab}</h3></div>
+            <Link to="/signup">Open workspace <ArrowRight size={14} /></Link>
+          </header>
+          {tab === 'Overview' && (
+            <>
+              <section className="product-window-stats">
+                <article><span>Calls handled</span><strong>24</strong><small>18% this week</small></article>
+                <article><span>Appointments booked</span><strong>9</strong><small>All confirmed</small></article>
+                <article><span>Need attention</span><strong>2</strong><small>Human handoffs</small></article>
+              </section>
+              <section className="product-window-grid">
+                <article className="product-upcoming">
+                  <div className="product-panel-title"><h4>Next appointments</h4><a>View all</a></div>
+                  {[['10:30','Amelia Park','Routine cleaning'],['11:15','Jordan Lee','Consultation'],['2:00','Sam Rivera','Follow up']].map(([time,name,service]) => (
+                    <div key={name}><time><b>{time}</b><span>{time === '2:00' ? 'PM' : 'AM'}</span></time><p><strong>{name}</strong><small>{service}, Dr. Evans</small></p><i /></div>
+                  ))}
+                </article>
+                <article className="product-recent">
+                  <div className="product-panel-title"><h4>Just handled</h4><span>LIVE</span></div>
+                  <div className="product-recent-card"><span className="product-call-icon"><PhoneCall size={15} /></span><div><strong>Appointment confirmed</strong><p>Maya booked Emma for Thursday at 4:30 PM.</p><small>Just now</small></div><CheckCircle2 size={17} /></div>
+                  <div className="product-recent-card"><span className="product-message-icon"><MessageSquareText size={15} /></span><div><strong>Question resolved</strong><p>Insurance policy shared with Daniel.</p><small>8 min ago</small></div><CheckCircle2 size={17} /></div>
+                </article>
+              </section>
+            </>
+          )}
+          {tab === 'Conversations' && (
+            <section className="preview-list-panel">
+              <div className="preview-list-head"><span>Recent conversations</span><small>24 this week</small></div>
+              {[['Emma Wilson','Appointment booked','Just now'],['Daniel Brooks','Insurance question','8 min ago'],['Olivia Martin','Human handoff','24 min ago'],['Noah Taylor','Opening hours','1 hr ago']].map(([name,subject,time], index) => (
+                <button type="button" key={name}><i className={index === 2 ? 'attention' : ''}>{name[0]}</i><span><strong>{name}</strong><small>{subject}</small></span><time>{time}</time><ArrowRight size={14} /></button>
+              ))}
+            </section>
+          )}
+          {tab === 'Bookings' && (
+            <section className="preview-bookings">
+              <div className="preview-calendar-head"><button type="button">‹</button><strong>June 2026</strong><button type="button">›</button></div>
+              <div className="preview-calendar-grid">{['M','T','W','T','F','S','S'].map((day,index) => <small key={`${day}-${index}`}>{day}</small>)}{Array.from({length:28},(_,index) => <button className={[9,14,23].includes(index + 1) ? 'booked' : index + 1 === 18 ? 'selected' : ''} type="button" key={index}>{index + 1}</button>)}</div>
+              <div className="preview-booking-detail"><CalendarDays size={18} /><span><strong>3 appointments today</strong><small>Next at 10:30 AM with Amelia Park</small></span></div>
+            </section>
+          )}
+          {tab === 'Knowledge' && (
+            <section className="preview-knowledge">
+              <div className="preview-list-head"><span>Approved knowledge</span><button type="button">Add article</button></div>
+              {[['Services and pricing','12 answers','Published'],['Insurance policy','8 answers','Published'],['New patient guide','6 answers','Published'],['Emergency handoff rules','4 answers','Review']].map(([title,count,status]) => (
+                <article key={title}><BookOpen size={17} /><span><strong>{title}</strong><small>{count}</small></span><i className={status === 'Review' ? 'review' : ''}>{status}</i></article>
+              ))}
+            </section>
+          )}
+          {tab === 'Settings' && (
+            <section className="preview-settings">
+              <div><span><strong>Receptionist online</strong><small>Delia can answer new conversations</small></span><button className="on" type="button"><i /></button></div>
+              <div><span><strong>Booking confirmation</strong><small>Ask before creating every appointment</small></span><button className="on" type="button"><i /></button></div>
+              <div><span><strong>Human handoff</strong><small>Send difficult conversations to your team</small></span><button className="on" type="button"><i /></button></div>
+              <div><span><strong>After hours calls</strong><small>Answer outside your regular schedule</small></span><button type="button"><i /></button></div>
+            </section>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
 function Home() {
+  const moveHeroGlow = (event: React.MouseEvent<HTMLElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty('--hero-x', `${event.clientX - bounds.left}px`);
+    event.currentTarget.style.setProperty('--hero-y', `${event.clientY - bounds.top}px`);
+  };
+
   return (
     <main className="home-page">
-      <section className="landing-hero">
+      <section className="landing-hero-new" onMouseMove={moveHeroGlow}>
+        <div className="hero-announcement">
+          <span>Delia voice demo is live</span>
+          <a href="#how-it-works">Talk to Delia <ArrowRight size={16} /></a>
+        </div>
+        <h1>Your front desk,<br />always ready.</h1>
+        <p>
+          Delia answers every call, knows your business, books appointments and gives your team
+          back the time to do their best work.
+        </p>
+        <div className="hero-new-actions">
+          <Link className="hero-new-primary" to="/signup">Start building</Link>
+          <a className="hero-new-secondary" href="#how-it-works">Hear Delia live <ArrowRight size={16} /></a>
+        </div>
+      </section>
+      <section className="landing-hero landing-hero-retired">
         <div className="landing-copy">
-          <h1>Your best first impression, every single time.</h1>
-          <p className="landing-intro">Delia is the AI receptionist that knows your business, handles the routine, and never lets a valuable customer call disappear into voicemail.</p>
-          <div className="landing-actions"><Link className="landing-primary" to="/signup">Build your Delia <ArrowRight size={17} /></Link><Link className="landing-demo-link" to="/receptionist"><span className="landing-play">›</span> Hear Delia answer</Link></div>
-          <div className="landing-proof"><div className="landing-people" aria-hidden="true"><img src="/receptionists/maya.png" alt="" /><img src="/receptionists/sofia.png" alt="" /><img src="/receptionists/leo.png" alt="" /></div><p><strong>Built for busy teams</strong><br />who would rather be with customers.</p></div>
+          <h1>Every call,<br />handled beautifully.</h1>
+          <div className="landing-actions">
+            <Link className="landing-primary" to="/signup">
+              Start building <ArrowRight size={17} />
+            </Link>
+            <Link className="landing-demo-link" to="/receptionist">
+              <span className="landing-play">›</span> Hear Delia answer
+            </Link>
+          </div>
+          <div className="landing-proof">
+            <div className="landing-people" aria-hidden="true">
+              <img src="/receptionists/maya.png" alt="" />
+              <img src="/receptionists/sofia.png" alt="" />
+              <img src="/receptionists/leo.png" alt="" />
+            </div>
+            <p>
+              <strong>Built for busy teams</strong>
+              <br />
+              who would rather be with customers.
+            </p>
+          </div>
         </div>
         <div className="landing-stage" aria-label="A preview of a Delia customer call">
-          <div className="stage-spark stage-spark-left" aria-hidden="true">✦</div><div className="stage-spark stage-spark-right" aria-hidden="true">✦</div>
-          <div className="call-card"><div className="call-card-top"><span className="call-card-brand">DELIA <i /></span><span className="call-card-status"><b /> LIVE CALL</span></div><div className="call-card-person"><div className="call-card-avatar"><img src="/receptionists/maya.png" alt="Maya, Delia receptionist" /></div><div><span>AI receptionist</span><h2>Maya</h2></div><button type="button" aria-label="More call options">•••</button></div><div className="call-card-wave" aria-label="Call audio is active"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div><p className="call-card-time">00:42 <span>•</span> Connected</p><div className="call-card-transcript"><span>Maya is taking care of it</span><p>“I have an opening this Thursday at 4:30. Shall I reserve it for you?”</p></div><div className="call-card-actions"><button type="button" aria-label="Mute call"><Mic size={17} /></button><button className="call-card-end" type="button" aria-label="End call"><PhoneCall size={19} /></button><button type="button" aria-label="Open keypad">•••</button></div></div>
-          <div className="stage-note stage-note-top"><CheckCircle2 size={16} /><span><strong>Appointment confirmed</strong><small>Thursday · 4:30 PM</small></span></div><div className="stage-note stage-note-bottom"><MessageSquareText size={16} /><span><strong>Human handoff, when needed</strong><small>With the full conversation attached</small></span></div>
+          <div className="stage-spark stage-spark-left" aria-hidden="true">
+            ✦
+          </div>
+          <div className="stage-spark stage-spark-right" aria-hidden="true">
+            ✦
+          </div>
+          <div className="call-card">
+            <div className="call-card-top">
+              <span className="call-card-brand">
+                DELIA <i />
+              </span>
+              <span className="call-card-status">
+                <b /> LIVE CALL
+              </span>
+            </div>
+            <div className="call-card-person">
+              <div className="call-card-avatar">
+                <img src="/receptionists/maya.png" alt="Maya, Delia receptionist" />
+              </div>
+              <div>
+                <span>AI receptionist</span>
+                <h2>Maya</h2>
+              </div>
+              <button type="button" aria-label="More call options">
+                •••
+              </button>
+            </div>
+            <div className="call-card-wave" aria-label="Call audio is active">
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+            <p className="call-card-time">
+              00:42 <span>•</span> Connected
+            </p>
+            <div className="call-card-transcript">
+              <span>Maya is taking care of it</span>
+              <p>“I have an opening this Thursday at 4:30. Shall I reserve it for you?”</p>
+            </div>
+            <div className="call-card-actions">
+              <button type="button" aria-label="Mute call">
+                <Mic size={17} />
+              </button>
+              <button className="call-card-end" type="button" aria-label="End call">
+                <PhoneCall size={19} />
+              </button>
+              <button type="button" aria-label="Open keypad">
+                •••
+              </button>
+            </div>
+          </div>
+          <div className="stage-note stage-note-top">
+            <CheckCircle2 size={16} />
+            <span>
+              <strong>Appointment confirmed</strong>
+              <small>Thursday · 4:30 PM</small>
+            </span>
+          </div>
+          <div className="stage-note stage-note-bottom">
+            <MessageSquareText size={16} />
+            <span>
+              <strong>Human handoff, when needed</strong>
+              <small>With the full conversation attached</small>
+            </span>
+          </div>
         </div>
       </section>
-      <section className="landing-logo-line" aria-label="Delia capabilities"><span>Your front desk, reimagined</span><div /><p>Answers questions <b>·</b> Books appointments <b>·</b> Follows up <b>·</b> Keeps your team in sync</p></section>
-      <section className="landing-promise"><div><h2>It sounds like someone<br />who actually works there.</h2></div><p>Give Delia the details you already trust your front desk with: services, policies, openings, and your preferred way of speaking. It turns that knowledge into genuinely useful conversations.</p></section>
+      <section className="landing-logo-line" aria-label="Delia capabilities">
+        <div className="landing-word-roll">
+          <span>Answers</span><i>✦</i><span>Books</span><i>✦</i><span>Qualifies</span><i>✦</i>
+          <span>Remembers</span><i>✦</i><span>Follows up</span><i>✦</i><span>Hands off</span><i>✦</i>
+          <span>Answers</span><i>✦</i><span>Books</span><i>✦</i><span>Qualifies</span><i>✦</i>
+          <span>Remembers</span><i>✦</i><span>Follows up</span><i>✦</i><span>Hands off</span><i>✦</i>
+        </div>
+        <span>Your front desk, reimagined</span>
+        <div />
+        <p>
+          Answers questions <b>·</b> Books appointments <b>·</b> Follows up <b>·</b> Keeps your team
+          in sync
+        </p>
+      </section>
+      <section className="landing-promise">
+        <div>
+          <h2>
+            It sounds like someone
+            <br />
+            who actually works there.
+          </h2>
+        </div>
+        <p>
+          Give Delia the details you already trust your front desk with: services, policies,
+          openings, and your preferred way of speaking. It turns that knowledge into genuinely
+          useful conversations.
+        </p>
+      </section>
       <section className="landing-features" id="product">
-        <article className="landing-feature landing-feature-dark"><div className="feature-number">01</div><div className="feature-icon"><Headphones /></div><h3>Always warm.<br />Always on.</h3><p>Every caller gets a clear, patient answer — even when your team is in the middle of something important.</p><div className="feature-mini-conversation"><span>Can I ask about your pricing?</span><strong>Of course. Here’s how it works. <i /></strong></div></article>
-        <article className="landing-feature landing-feature-mint"><div className="feature-number">02</div><div className="feature-icon"><CalendarDays /></div><h3>Appointments that<br />actually stick.</h3><p>Delia sees live availability, collects the details, and asks for confirmation before anything changes.</p><div className="feature-calendar"><span>THU</span><strong>24</strong><i /><small>4:30 PM</small></div></article>
-        <article className="landing-feature landing-feature-paper"><div className="feature-number">03</div><div className="feature-icon"><ShieldCheck /></div><h3>Never a black box.</h3><p>Every answer comes from the information you approve. Every handoff arrives with context.</p><div className="feature-checks"><span><CheckCircle2 size={15} /> Your business knowledge</span><span><CheckCircle2 size={15} /> Your booking rules</span><span><CheckCircle2 size={15} /> Your team, in the loop</span></div></article>
+        <article className="landing-feature landing-feature-dark">
+          <div className="feature-number">01</div>
+          <div className="feature-icon">
+            <Headphones />
+          </div>
+          <h3>
+            Always warm.
+            <br />
+            Always on.
+          </h3>
+          <p>
+            Every caller gets a clear, patient answer. Even when your team is in the middle of
+            something important.
+          </p>
+          <div className="feature-mini-conversation">
+            <span>Can I ask about your pricing?</span>
+            <strong>
+              Of course. Here’s how it works. <i />
+            </strong>
+          </div>
+        </article>
+        <article className="landing-feature landing-feature-mint">
+          <div className="feature-number">02</div>
+          <div className="feature-icon">
+            <CalendarDays />
+          </div>
+          <h3>
+            Appointments that
+            <br />
+            actually stick.
+          </h3>
+          <p>
+            Delia sees live availability, collects the details, and asks for confirmation before
+            anything changes.
+          </p>
+          <div className="feature-calendar">
+            <span>THU</span>
+            <strong>24</strong>
+            <i />
+            <small>4:30 PM</small>
+          </div>
+        </article>
+        <article className="landing-feature landing-feature-paper">
+          <div className="feature-number">03</div>
+          <div className="feature-icon">
+            <ShieldCheck />
+          </div>
+          <h3>Never a black box.</h3>
+          <p>
+            Every answer comes from the information you approve. Every handoff arrives with context.
+          </p>
+          <div className="feature-checks">
+            <span>
+              <CheckCircle2 size={15} /> Your business knowledge
+            </span>
+            <span>
+              <CheckCircle2 size={15} /> Your booking rules
+            </span>
+            <span>
+              <CheckCircle2 size={15} /> Your team, in the loop
+            </span>
+          </div>
+        </article>
       </section>
       <section className="landing-showcase">
-        <div className="landing-showcase-intro"><h2>One conversation.<br />A complete next step.</h2><p>Delia turns the loose ends of a customer call into something your team can use immediately.</p></div>
-        <div className="landing-product-window" aria-label="Delia workspace product preview">
-          <div className="product-window-bar"><div><i /><i /><i /></div><span>delia.ai/workspace</span><b>●</b></div>
-          <div className="product-window-body"><aside><strong><span>◆</span> DELIA</strong><small>WORKSPACE</small><a className="active">⌂ Overview</a><a>◌ Conversations</a><a>□ Bookings</a><a>◇ Knowledge</a><a>⚙ Settings</a><div><span className="product-person-dot">M</span> Northstar Dental</div></aside><main><header><div><p>Tuesday, June 24</p><h3>Your front desk is humming.</h3></div><button type="button">Test Delia <ArrowRight size={14} /></button></header><section className="product-window-stats"><article><span>Calls handled</span><strong>24</strong><small>↑ 18% this week</small></article><article><span>Appointments booked</span><strong>9</strong><small>All confirmed</small></article><article><span>Need attention</span><strong>2</strong><small>Human handoffs</small></article></section><section className="product-window-grid"><article className="product-upcoming"><div className="product-panel-title"><h4>Next appointments</h4><a>View all</a></div><div><time><b>10:30</b><span>AM</span></time><p><strong>Amelia Park</strong><small>Routine cleaning · Dr. Evans</small></p><i /></div><div><time><b>11:15</b><span>AM</span></time><p><strong>Jordan Lee</strong><small>Consultation · Dr. Evans</small></p><i /></div><div><time><b>2:00</b><span>PM</span></time><p><strong>Sam Rivera</strong><small>Follow-up · Dr. Stone</small></p><i /></div></article><article className="product-recent"><div className="product-panel-title"><h4>Just handled</h4><span>LIVE</span></div><div className="product-recent-card"><span className="product-call-icon"><PhoneCall size={15} /></span><div><strong>Appointment confirmed</strong><p>Maya booked Emma for Thursday at 4:30 PM.</p><small>Just now</small></div><CheckCircle2 size={17} /></div><div className="product-recent-card"><span className="product-message-icon"><MessageSquareText size={15} /></span><div><strong>Question resolved</strong><p>Insurance policy shared with Daniel.</p><small>8 min ago</small></div><CheckCircle2 size={17} /></div></article></section></main></div>
+        <div className="landing-showcase-intro">
+          <h2>
+            One conversation.
+            <br />A complete next step.
+          </h2>
+          <p>
+            Delia turns the loose ends of a customer call into something your team can use
+            immediately.
+          </p>
+        </div>
+        <LandingDashboardPreview />
+        <div className="landing-product-window landing-product-window-legacy" aria-label="Delia workspace product preview">
+          <div className="product-window-bar">
+            <div>
+              <i />
+              <i />
+              <i />
+            </div>
+            <span>delia.ai/workspace</span>
+            <b>●</b>
+          </div>
+          <div className="product-window-body">
+            <aside>
+              <strong>
+                <span>◆</span> DELIA
+              </strong>
+              <small>WORKSPACE</small>
+              <a className="active">⌂ Overview</a>
+              <a>◌ Conversations</a>
+              <a>□ Bookings</a>
+              <a>◇ Knowledge</a>
+              <a>⚙ Settings</a>
+              <div>
+                <span className="product-person-dot">M</span> Northstar Dental
+              </div>
+            </aside>
+            <main>
+              <header>
+                <div>
+                  <p>Tuesday, June 24</p>
+                  <h3>Your front desk is humming.</h3>
+                </div>
+                <button type="button">
+                  Test Delia <ArrowRight size={14} />
+                </button>
+              </header>
+              <section className="product-window-stats">
+                <article>
+                  <span>Calls handled</span>
+                  <strong>24</strong>
+                  <small>↑ 18% this week</small>
+                </article>
+                <article>
+                  <span>Appointments booked</span>
+                  <strong>9</strong>
+                  <small>All confirmed</small>
+                </article>
+                <article>
+                  <span>Need attention</span>
+                  <strong>2</strong>
+                  <small>Human handoffs</small>
+                </article>
+              </section>
+              <section className="product-window-grid">
+                <article className="product-upcoming">
+                  <div className="product-panel-title">
+                    <h4>Next appointments</h4>
+                    <a>View all</a>
+                  </div>
+                  <div>
+                    <time>
+                      <b>10:30</b>
+                      <span>AM</span>
+                    </time>
+                    <p>
+                      <strong>Amelia Park</strong>
+                      <small>Routine cleaning · Dr. Evans</small>
+                    </p>
+                    <i />
+                  </div>
+                  <div>
+                    <time>
+                      <b>11:15</b>
+                      <span>AM</span>
+                    </time>
+                    <p>
+                      <strong>Jordan Lee</strong>
+                      <small>Consultation · Dr. Evans</small>
+                    </p>
+                    <i />
+                  </div>
+                  <div>
+                    <time>
+                      <b>2:00</b>
+                      <span>PM</span>
+                    </time>
+                    <p>
+                      <strong>Sam Rivera</strong>
+                      <small>Follow-up · Dr. Stone</small>
+                    </p>
+                    <i />
+                  </div>
+                </article>
+                <article className="product-recent">
+                  <div className="product-panel-title">
+                    <h4>Just handled</h4>
+                    <span>LIVE</span>
+                  </div>
+                  <div className="product-recent-card">
+                    <span className="product-call-icon">
+                      <PhoneCall size={15} />
+                    </span>
+                    <div>
+                      <strong>Appointment confirmed</strong>
+                      <p>Maya booked Emma for Thursday at 4:30 PM.</p>
+                      <small>Just now</small>
+                    </div>
+                    <CheckCircle2 size={17} />
+                  </div>
+                  <div className="product-recent-card">
+                    <span className="product-message-icon">
+                      <MessageSquareText size={15} />
+                    </span>
+                    <div>
+                      <strong>Question resolved</strong>
+                      <p>Insurance policy shared with Daniel.</p>
+                      <small>8 min ago</small>
+                    </div>
+                    <CheckCircle2 size={17} />
+                  </div>
+                </article>
+              </section>
+            </main>
+          </div>
         </div>
       </section>
-      <section className="landing-flow" id="how-it-works"><div className="landing-flow-copy"><h2>In control from<br />day one.</h2><p>There is no mystery prompt and no leap of faith. You shape Delia, test real scenarios privately, and only then invite customers in.</p><Link to="/signup" className="landing-inline-link">See how setup works <ArrowRight size={16} /></Link></div><ol className="landing-steps"><li><span>01</span><div><h3>Tell Delia the essentials</h3><p>Add services, hours, policies, and the details customers ask for every day.</p></div></li><li><span>02</span><div><h3>Try a few difficult calls</h3><p>Test it privately, adjust the answers, and make it sound unmistakably like you.</p></div></li><li><span>03</span><div><h3>Put it to work</h3><p>Share your booking link or add Delia to your website when you are ready.</p></div></li></ol></section>
-      <section className="landing-trust">
-        <div className="landing-trust-intro"><h2>Helpful by default.<br />Careful by design.</h2><p>Delia is made for the practical questions that matter when a customer reaches out.</p></div>
-        <div className="landing-trust-grid"><article><ShieldCheck /><h3>Your information stays yours.</h3><p>Delia answers from the services, policies, and details you choose to provide.</p></article><article><CalendarDays /><h3>Nothing books by accident.</h3><p>Appointments are checked against live availability and confirmed before they are saved.</p></article><article><Headphones /><h3>A human is always in reach.</h3><p>When a conversation needs your team, the handoff includes the context that came before it.</p></article></div>
+      <LandingVoiceDemo />
+      <ScrollRevealStatement />
+      <section className="landing-faq landing-faq-retired" aria-labelledby="faq-heading">
+        <div>
+          <h2 id="faq-heading">
+            Before you hand
+            <br />
+            over the phone.
+          </h2>
+          <p>Everything you need to know before your first private test call.</p>
+          <Link className="landing-inline-link" to="/receptionist">
+            Try the live demo <ArrowRight size={16} />
+          </Link>
+        </div>
+        <div className="landing-faq-list">
+          <details open>
+            <summary>
+              Does Delia sound like a robot?<span>+</span>
+            </summary>
+            <p>
+              Delia is configured with your business details and chosen tone, then you can test real
+              conversations before customers ever hear it.
+            </p>
+          </details>
+          <details>
+            <summary>
+              Can I control what Delia says?<span>+</span>
+            </summary>
+            <p>
+              Yes. You provide the facts it can use: services, policies, hours, handoff rules, and
+              preferred greeting. You can update them whenever your business changes.
+            </p>
+          </details>
+          <details>
+            <summary>
+              What happens when Delia cannot help?<span>+</span>
+            </summary>
+            <p>
+              It can take a callback request or hand the conversation to your team with the caller’s
+              details and the relevant context attached.
+            </p>
+          </details>
+          <details>
+            <summary>
+              Do I need to install anything first?<span>+</span>
+            </summary>
+            <p>
+              No. Start by setting up and testing your receptionist privately. When it is ready, you
+              can add the website widget or share a booking link.
+            </p>
+          </details>
+        </div>
       </section>
-      <section className="landing-faq" aria-labelledby="faq-heading"><div><h2 id="faq-heading">Before you hand<br />over the phone.</h2><p>Everything you need to know before your first private test call.</p><Link className="landing-inline-link" to="/receptionist">Try the live demo <ArrowRight size={16} /></Link></div><div className="landing-faq-list"><details open><summary>Does Delia sound like a robot?<span>+</span></summary><p>Delia is configured with your business details and chosen tone, then you can test real conversations before customers ever hear it.</p></details><details><summary>Can I control what Delia says?<span>+</span></summary><p>Yes. You provide the facts it can use: services, policies, hours, handoff rules, and preferred greeting. You can update them whenever your business changes.</p></details><details><summary>What happens when Delia cannot help?<span>+</span></summary><p>It can take a callback request or hand the conversation to your team with the caller’s details and the relevant context attached.</p></details><details><summary>Do I need to install anything first?<span>+</span></summary><p>No. Start by setting up and testing your receptionist privately. When it is ready, you can add the website widget or share a booking link.</p></details></div></section>
-      <section className="landing-closing"><div className="landing-closing-mark" aria-hidden="true">✳</div><h2>Make every call feel<br />like you picked up.</h2><p>Start with the facts. Let Delia handle the first hello.</p><Link className="landing-primary" to="/signup">Start building for free <ArrowRight size={17} /></Link></section>
+      <section className="landing-closing">
+        <div className="landing-closing-mark" aria-hidden="true">
+          ✳
+        </div>
+        <h2>
+          We know your business.
+          <br />
+          Delia knows every call.
+        </h2>
+        <ButtonWithIcon label="Start building" to="/signup" />
+      </section>
     </main>
   );
 }
@@ -379,18 +1314,75 @@ function AuthPage({ mode }: { mode: 'signup' | 'login' }) {
       setSaving(false);
     }
   }
+  async function submitPremium(data: { email: string; password: string; businessName: string }) {
+    setSaving(true);
+    setError('');
+    try {
+      const account =
+        mode === 'signup'
+          ? await signUp(data)
+          : await login({ email: data.email, password: data.password });
+      nav(account.onboardingCompleted ? '/dashboard' : '/onboarding');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'We could not sign you in. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <main className="simple-auth-page">
+      <PremiumAuth
+        initialMode={mode}
+        loading={saving}
+        error={error}
+        googleEnabled={googleEnabled}
+        onGoogle={startGoogleLogin}
+        onModeChange={(nextMode) => nav(nextMode === 'login' ? '/login' : '/signup')}
+        onSubmit={(data) => void submitPremium(data)}
+      />
+    </main>
+  );
+  /* Legacy form retained temporarily while the simplified component is validated. */
   const signingUp = mode === 'signup';
   return (
     <main className="page auth-page">
       <aside className="auth-intro">
-        <Link className="auth-back" to="/">← Back to Delia</Link>
+        <Link className="auth-back" to="/">
+          ← Back to Delia
+        </Link>
         <p className="eyebrow">Your private workspace</p>
         <h1>{signingUp ? 'A calmer way to run the front desk.' : 'Pick up where you left off.'}</h1>
-        <p>{signingUp ? 'Add the facts your receptionist needs, test the experience privately, and publish only when it sounds like your business.' : 'Your services, conversations, bookings, and receptionist settings are waiting for you.'}</p>
+        <p>
+          {signingUp
+            ? 'Add the facts your receptionist needs, test the experience privately, and publish only when it sounds like your business.'
+            : 'Your services, conversations, bookings, and receptionist settings are waiting for you.'}
+        </p>
         <div className="auth-points">
-          <span><CheckCircle2 /> Guided setup, no prompt writing</span>
-          <span><ShieldCheck /> Workspace-scoped customer data</span>
-          <span><PhoneCall /> Test calls before publishing</span>
+          <span>
+            <CheckCircle2 /> Guided setup, no prompt writing
+          </span>
+          <span>
+            <ShieldCheck /> Workspace-scoped customer data
+          </span>
+          <span>
+            <PhoneCall /> Test calls before publishing
+          </span>
+        </div>
+        <div className="auth-preview" aria-hidden="true">
+          <div className="auth-preview-head">
+            <span><i /> Delia is live</span>
+            <small>Receptionist overview</small>
+          </div>
+          <div className="auth-preview-stats">
+            <span><strong>24</strong>Calls handled</span>
+            <span><strong>9</strong>Appointments</span>
+            <span><strong>100%</strong>Available</span>
+          </div>
+          <div className="auth-preview-call">
+            <span className="auth-preview-avatar">D</span>
+            <span><strong>Customer call handled</strong><small>Appointment confirmed for Thursday</small></span>
+            <CheckCircle2 />
+          </div>
         </div>
       </aside>
       <section className="summary auth-card">
@@ -445,9 +1437,17 @@ function AuthPage({ mode }: { mode: 'signup' | 'login' }) {
             {saving ? 'Please wait…' : signingUp ? 'Create free workspace' : 'Sign in'}
           </button>
         </form>
-        <div className="auth-divider"><span>or</span></div>
-        <button className="button google-auth" onClick={startGoogleLogin} disabled={saving || !googleEnabled}>
-          <span aria-hidden="true">G</span> Continue with Google
+        <div className="auth-divider">
+          <span>or</span>
+        </div>
+        <button
+          className="button google-auth"
+          onClick={startGoogleLogin}
+          disabled={saving || !googleEnabled}
+        >
+          <span className="google-auth-icon"><GoogleIcon /></span>
+          <span className="google-auth-label">Continue with Google</span>
+          <ArrowRight className="google-auth-arrow" size={17} />
         </button>
         <small className="auth-note">
           {googleEnabled
@@ -476,7 +1476,16 @@ const onboardingDefaults: OnboardingBusiness = {
   handoffInstructions: 'Offer a callback when the answer is not in approved business information.'
 };
 
-const industryOptions = ['Salon & beauty', 'Health & wellness', 'Dental clinic', 'Home services', 'Legal & professional', 'Fitness & coaching', 'Automotive', 'Other'];
+const industryOptions = [
+  'Salon & beauty',
+  'Health & wellness',
+  'Dental clinic',
+  'Home services',
+  'Legal & professional',
+  'Fitness & coaching',
+  'Automotive',
+  'Other'
+];
 const descriptionStarters = [
   'We help local customers with trusted, appointment-based service.',
   'We provide friendly, professional care with clear pricing and flexible booking.',
@@ -576,7 +1585,16 @@ function Onboarding() {
               />
             </label>
             <div className="choice-group" aria-label="Business type suggestions">
-              {industryOptions.map((industry) => <button type="button" key={industry} className={values.industry === industry ? 'selected' : ''} onClick={() => applyIndustry(industry)}>{industry}</button>)}
+              {industryOptions.map((industry) => (
+                <button
+                  type="button"
+                  key={industry}
+                  className={values.industry === industry ? 'selected' : ''}
+                  onClick={() => applyIndustry(industry)}
+                >
+                  {industry}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -595,7 +1613,15 @@ function Onboarding() {
               Berlin.”
             </small>
             <div className="choice-group" aria-label="Description starters">
-              {descriptionStarters.map((starter) => <button type="button" key={starter} onClick={() => update('companyDescription', starter)}>{starter}</button>)}
+              {descriptionStarters.map((starter) => (
+                <button
+                  type="button"
+                  key={starter}
+                  onClick={() => update('companyDescription', starter)}
+                >
+                  {starter}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -818,7 +1844,13 @@ function WorkspaceDashboard() {
   const [widgetLive, setWidgetLive] = useState<boolean>();
   const [serviceCount, setServiceCount] = useState<number>();
   useEffect(() => {
-    void Promise.all([getWorkspaceKnowledge(), getWorkspaceCrmBookings(), getWorkspaceCrmCustomers(), getWorkspaceWidget(), getWorkspaceServices()])
+    void Promise.all([
+      getWorkspaceKnowledge(),
+      getWorkspaceCrmBookings(),
+      getWorkspaceCrmCustomers(),
+      getWorkspaceWidget(),
+      getWorkspaceServices()
+    ])
       .then(([articles, nextBookings, nextCustomers, widget, services]) => {
         setKnowledgeCount(articles.length);
         setBookings(nextBookings);
@@ -830,21 +1862,57 @@ function WorkspaceDashboard() {
   }, []);
   const openBookings = bookings.filter((booking) => booking.status === 'OPEN');
   const setupSteps = [
-    { label: 'Add bookable services', done: Boolean(serviceCount), to: '/dashboard/business', action: 'Add services' },
-    { label: 'Teach Delia key answers', done: Boolean(knowledgeCount), to: '/dashboard/knowledge', action: 'Add knowledge' },
-    { label: 'Test a customer conversation', done: false, to: '/dashboard/chat', action: 'Run a test' },
-    { label: 'Publish to your website', done: Boolean(widgetLive), to: '/dashboard/widget', action: 'Publish widget' }
+    {
+      label: 'Add bookable services',
+      done: Boolean(serviceCount),
+      to: '/dashboard/business',
+      action: 'Add services'
+    },
+    {
+      label: 'Teach Delia key answers',
+      done: Boolean(knowledgeCount),
+      to: '/dashboard/knowledge',
+      action: 'Add knowledge'
+    },
+    {
+      label: 'Test a customer conversation',
+      done: false,
+      to: '/dashboard/chat',
+      action: 'Run a test'
+    },
+    {
+      label: 'Publish to your website',
+      done: Boolean(widgetLive),
+      to: '/dashboard/widget',
+      action: 'Publish widget'
+    }
   ];
   const needsServices = !serviceCount;
   const needsKnowledge = !knowledgeCount;
   const needsWebsite = !widgetLive;
   const nextAction = needsServices
-    ? { label: 'Add your services', detail: 'Customers cannot book until you define what they can book.', to: '/dashboard/business' }
+    ? {
+        label: 'Add your services',
+        detail: 'Customers cannot book until you define what they can book.',
+        to: '/dashboard/business'
+      }
     : needsKnowledge
-      ? { label: 'Teach Delia your top answers', detail: 'Give callers confident answers before they reach your team.', to: '/dashboard/knowledge' }
+      ? {
+          label: 'Teach Delia your top answers',
+          detail: 'Give callers confident answers before they reach your team.',
+          to: '/dashboard/knowledge'
+        }
       : needsWebsite
-        ? { label: 'Publish Delia to your website', detail: 'Turn the receptionist on for your visitors.', to: '/dashboard/widget' }
-        : { label: 'Run a customer test', detail: 'Check the experience before your next customer does.', to: '/dashboard/receptionist' };
+        ? {
+            label: 'Publish Delia to your website',
+            detail: 'Turn the receptionist on for your visitors.',
+            to: '/dashboard/widget'
+          }
+        : {
+            label: 'Run a customer test',
+            detail: 'Check the experience before your next customer does.',
+            to: '/dashboard/receptionist'
+          };
   const recentBookings = [...bookings]
     .sort((left, right) => +new Date(right.appointmentAt) - +new Date(left.appointmentAt))
     .slice(0, 4);
@@ -854,32 +1922,167 @@ function WorkspaceDashboard() {
     <WorkspaceShell>
       <div className="overview-page">
         <header className="overview-header">
-          <div className="overview-title"><h1>Front desk</h1></div>
+          <div className="overview-title">
+            <h1>Front desk</h1>
+          </div>
         </header>
 
-        <section className={`overview-command ${publishingNext ? 'overview-command-publish' : ''}`} aria-label="Recommended next action">
-          <span className="overview-command-icon"><Headphones /></span>
-          <div><small>{widgetLive ? 'Receptionist online' : 'Your next move'}</small><h2>{nextAction.label}</h2>{publishingNext && <div className="overview-publish-path" aria-hidden="true"><span><Building2 /></span><i /><span><Headphones /></span><i /><span><MessageSquareText /></span></div>}</div>
-          <Link className="button" to={nextAction.to}>{publishingNext ? 'Publish now' : 'Continue'} <ArrowRight size={15} /></Link>
+        <section
+          className={`overview-command ${publishingNext ? 'overview-command-publish' : ''}`}
+          aria-label="Recommended next action"
+        >
+          <span className="overview-command-icon">
+            <Headphones />
+          </span>
+          <div>
+            <small>{widgetLive ? 'Receptionist online' : 'Your next move'}</small>
+            <h2>{nextAction.label}</h2>
+            {publishingNext && (
+              <div className="overview-publish-path" aria-hidden="true">
+                <span>
+                  <Building2 />
+                </span>
+                <i />
+                <span>
+                  <Headphones />
+                </span>
+                <i />
+                <span>
+                  <MessageSquareText />
+                </span>
+              </div>
+            )}
+          </div>
+          <Link className="button" to={nextAction.to}>
+            {publishingNext ? 'Publish now' : 'Continue'} <ArrowRight size={15} />
+          </Link>
         </section>
 
-        {!widgetLive && <section className="overview-launch" aria-label="Launch progress"><div className="overview-launch-meta"><span>Launch</span><strong>{completedSteps}/{setupSteps.length}</strong></div><div className="overview-launch-track"><i style={{ width: `${(completedSteps / setupSteps.length) * 100}%` }} /></div>{setupSteps.map((step, index) => <Link key={step.label} to={step.to} className={step.done ? 'done' : ''} aria-label={step.label}>{step.done ? <CheckCircle2 size={17} /> : <span>{index + 1}</span>}</Link>)}</section>}
+        {!widgetLive && (
+          <section className="overview-launch" aria-label="Launch progress">
+            <div className="overview-launch-meta">
+              <span>Launch</span>
+              <strong>
+                {completedSteps}/{setupSteps.length}
+              </strong>
+            </div>
+            <div className="overview-launch-track">
+              <i style={{ width: `${(completedSteps / setupSteps.length) * 100}%` }} />
+            </div>
+            {setupSteps.map((step, index) => (
+              <Link
+                key={step.label}
+                to={step.to}
+                className={step.done ? 'done' : ''}
+                aria-label={step.label}
+              >
+                {step.done ? <CheckCircle2 size={17} /> : <span>{index + 1}</span>}
+              </Link>
+            ))}
+          </section>
+        )}
 
         <section className="overview-stats" aria-label="Workspace totals">
-          <Link to="/dashboard/crm"><CalendarDays /><strong>{openBookings.length}</strong><span>Bookings</span></Link>
-          <Link to="/dashboard/crm"><Building2 /><strong>{customers.length}</strong><span>Customers</span></Link>
-          <Link className={knowledgeCount === 0 ? 'needs-attention' : ''} to="/dashboard/knowledge"><BookOpen /><strong>{knowledgeCount ?? '—'}</strong><span>Answers</span>{knowledgeCount === 0 && <small className="overview-stat-badge">Add answers</small>}</Link>
-          <Link className={serviceCount === 0 ? 'needs-attention' : ''} to="/dashboard/business"><Settings2 /><strong>{serviceCount ?? '—'}</strong><span>Services</span>{serviceCount === 0 && <small className="overview-stat-badge">Add services</small>}</Link>
+          <Link to="/dashboard/crm">
+            <CalendarDays />
+            <strong>{openBookings.length}</strong>
+            <span>Bookings</span>
+          </Link>
+          <Link to="/dashboard/crm">
+            <Building2 />
+            <strong>{customers.length}</strong>
+            <span>Customers</span>
+          </Link>
+          <Link className={knowledgeCount === 0 ? 'needs-attention' : ''} to="/dashboard/knowledge">
+            <BookOpen />
+            <strong>{knowledgeCount ?? '—'}</strong>
+            <span>Answers</span>
+            {knowledgeCount === 0 && <small className="overview-stat-badge">Add answers</small>}
+          </Link>
+          <Link className={serviceCount === 0 ? 'needs-attention' : ''} to="/dashboard/business">
+            <Settings2 />
+            <strong>{serviceCount ?? '—'}</strong>
+            <span>Services</span>
+            {serviceCount === 0 && <small className="overview-stat-badge">Add services</small>}
+          </Link>
         </section>
 
         <section className="overview-grid">
           <article className="overview-panel overview-upcoming">
-            <div className="overview-panel-header"><div><CalendarDays /><h2>Upcoming</h2></div><Link className="overview-panel-cta" to="/dashboard/crm">View calendar <ArrowRight size={15} /></Link></div>
-            {openBookings.length ? <div className="overview-booking-list">{openBookings.slice(0, 3).map((booking) => <Link key={booking.id} to="/dashboard/crm"><time>{new Date(booking.appointmentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><div><strong>{booking.customer.name}</strong><span>{booking.service.name}</span></div><ArrowRight size={15} /></Link>)}</div> : <div className="overview-empty"><CalendarDays /><div><strong>No appointments yet</strong><p>Confirmed bookings will appear here.</p></div><Link className="overview-empty-cta" to="/dashboard/widget">Share booking link <ArrowRight size={14} /></Link></div>}
+            <div className="overview-panel-header">
+              <div>
+                <CalendarDays />
+                <h2>Upcoming</h2>
+              </div>
+              <Link className="overview-panel-cta" to="/dashboard/crm">
+                View calendar <ArrowRight size={15} />
+              </Link>
+            </div>
+            {openBookings.length ? (
+              <div className="overview-booking-list">
+                {openBookings.slice(0, 3).map((booking) => (
+                  <Link key={booking.id} to="/dashboard/crm">
+                    <time>
+                      {new Date(booking.appointmentAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </time>
+                    <div>
+                      <strong>{booking.customer.name}</strong>
+                      <span>{booking.service.name}</span>
+                    </div>
+                    <ArrowRight size={15} />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="overview-empty">
+                <CalendarDays />
+                <div>
+                  <strong>No appointments yet</strong>
+                  <p>Confirmed bookings will appear here.</p>
+                </div>
+                <Link className="overview-empty-cta" to="/dashboard/widget">
+                  Share booking link <ArrowRight size={14} />
+                </Link>
+              </div>
+            )}
           </article>
           <article className="overview-panel overview-activity">
-            <div className="overview-panel-header"><div><MessageSquareText /><h2>Activity</h2></div><Link className="overview-panel-cta" to="/dashboard/inbox">View inbox <ArrowRight size={15} /></Link></div>
-            {recentBookings.length ? <div className="overview-activity-list">{recentBookings.slice(0, 3).map((booking) => <Link key={booking.id} to="/dashboard/crm"><span className="activity-mark">B</span><div><strong>{booking.customer.name}</strong><span>Booked {booking.service.name}</span></div></Link>)}</div> : <div className="overview-empty"><MessageSquareText /><div><strong>Nothing new</strong><p>Website and booking activity will show up here.</p></div><Link className="overview-empty-cta" to="/dashboard/widget">Open website <ArrowRight size={14} /></Link></div>}
+            <div className="overview-panel-header">
+              <div>
+                <MessageSquareText />
+                <h2>Activity</h2>
+              </div>
+              <Link className="overview-panel-cta" to="/dashboard/inbox">
+                View inbox <ArrowRight size={15} />
+              </Link>
+            </div>
+            {recentBookings.length ? (
+              <div className="overview-activity-list">
+                {recentBookings.slice(0, 3).map((booking) => (
+                  <Link key={booking.id} to="/dashboard/crm">
+                    <span className="activity-mark">B</span>
+                    <div>
+                      <strong>{booking.customer.name}</strong>
+                      <span>Booked {booking.service.name}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="overview-empty">
+                <MessageSquareText />
+                <div>
+                  <strong>Nothing new</strong>
+                  <p>Website and booking activity will show up here.</p>
+                </div>
+                <Link className="overview-empty-cta" to="/dashboard/widget">
+                  Open website <ArrowRight size={14} />
+                </Link>
+              </div>
+            )}
           </article>
         </section>
       </div>
@@ -900,12 +2103,20 @@ function BusinessHub() {
           </Link>
         </header>
         <section className="business-context-card">
-          <div className="business-context-icon"><Building2 /></div>
+          <div className="business-context-icon">
+            <Building2 />
+          </div>
           <div className="business-context-copy">
             <h2>Business details</h2>
             <p>Greeting, contact details, and booking rules.</p>
           </div>
-          <Link className="business-context-link" to="/onboarding" aria-label="Edit business details"><Settings2 size={19} /></Link>
+          <Link
+            className="business-context-link"
+            to="/onboarding"
+            aria-label="Edit business details"
+          >
+            <Settings2 size={19} />
+          </Link>
         </section>
         <WorkspaceServicesManager />
       </div>
@@ -914,29 +2125,71 @@ function BusinessHub() {
 }
 
 const servicePresets = [
-  { name: 'Initial consultation', durationMinutes: 30, priceLabel: 'Free', description: 'A short first conversation to understand the customer’s needs.' },
-  { name: 'Standard appointment', durationMinutes: 60, priceLabel: 'From $80', description: 'A full appointment for your core service.' },
-  { name: 'Follow-up appointment', durationMinutes: 30, priceLabel: 'From $50', description: 'A shorter visit for existing customers who need a follow-up.' },
-  { name: 'Emergency appointment', durationMinutes: 45, priceLabel: 'Price on request', description: 'A priority appointment for urgent customer needs.' }
+  {
+    name: 'Initial consultation',
+    durationMinutes: 30,
+    priceLabel: 'Free',
+    description: 'A short first conversation to understand the customer’s needs.'
+  },
+  {
+    name: 'Standard appointment',
+    durationMinutes: 60,
+    priceLabel: 'From $80',
+    description: 'A full appointment for your core service.'
+  },
+  {
+    name: 'Follow-up appointment',
+    durationMinutes: 30,
+    priceLabel: 'From $50',
+    description: 'A shorter visit for existing customers who need a follow-up.'
+  },
+  {
+    name: 'Emergency appointment',
+    durationMinutes: 45,
+    priceLabel: 'Price on request',
+    description: 'A priority appointment for urgent customer needs.'
+  }
 ];
 
 function slugify(value: string) {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 80);
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 80);
 }
 
 function WorkspaceServicesManager() {
   const [services, setServices] = useState<Service[]>([]);
-  const [draft, setDraft] = useState<Omit<Service, 'id'>>({ slug: '', name: '', description: '', priceLabel: '', durationMinutes: 60, isActive: true });
+  const [draft, setDraft] = useState<Omit<Service, 'id'>>({
+    slug: '',
+    name: '',
+    description: '',
+    priceLabel: '',
+    durationMinutes: 60,
+    isActive: true
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const refresh = () => void getWorkspaceServices().then(setServices).catch((reason: Error) => setError(reason.message));
+  const refresh = () =>
+    void getWorkspaceServices()
+      .then(setServices)
+      .catch((reason: Error) => setError(reason.message));
   useEffect(refresh, []);
   function reset() {
-    setDraft({ slug: '', name: '', description: '', priceLabel: '', durationMinutes: 60, isActive: true });
+    setDraft({
+      slug: '',
+      name: '',
+      description: '',
+      priceLabel: '',
+      durationMinutes: 60,
+      isActive: true
+    });
     setEditing(false);
   }
-  function choosePreset(preset: typeof servicePresets[number]) {
+  function choosePreset(preset: (typeof servicePresets)[number]) {
     setDraft({ ...preset, slug: slugify(preset.name), isActive: true });
     setEditing(true);
   }
@@ -959,33 +2212,159 @@ function WorkspaceServicesManager() {
   return (
     <section className="services-manager">
       <div className="services-manager-header">
-        <div><h2>Services</h2><p>What customers can book.</p></div>
-        <button className="button" onClick={() => { reset(); setEditing(true); }}>Add service <ArrowRight size={16} /></button>
+        <div>
+          <h2>Services</h2>
+          <p>What customers can book.</p>
+        </div>
+        <button
+          className="button"
+          onClick={() => {
+            reset();
+            setEditing(true);
+          }}
+        >
+          Add service <ArrowRight size={16} />
+        </button>
       </div>
-      {services.length === 0 && !editing && <div className="empty-state service-empty"><div className="service-empty-icon"><CalendarDays /></div><div><h3>No services yet</h3><p>Choose a template to begin.</p></div></div>}
+      {services.length === 0 && !editing && (
+        <div className="empty-state service-empty">
+          <div className="service-empty-icon">
+            <CalendarDays />
+          </div>
+          <div>
+            <h3>No services yet</h3>
+            <p>Choose a template to begin.</p>
+          </div>
+        </div>
+      )}
       <section className="service-templates" aria-label="Quick service templates">
-        <div className="service-templates-heading"><span>QUICK START</span></div>
+        <div className="service-templates-heading">
+          <span>QUICK START</span>
+        </div>
         <div className="service-presets">
-          {servicePresets.map((preset) => <button key={preset.name} onClick={() => choosePreset(preset)}><strong>{preset.name}</strong><span>{preset.durationMinutes} min <i /> {preset.priceLabel}</span><ArrowRight size={16} /></button>)}
+          {servicePresets.map((preset) => (
+            <button key={preset.name} onClick={() => choosePreset(preset)}>
+              <strong>{preset.name}</strong>
+              <span>
+                {preset.durationMinutes} min <i /> {preset.priceLabel}
+              </span>
+              <ArrowRight size={16} />
+            </button>
+          ))}
         </div>
       </section>
-      {editing && <form className="form service-editor" onSubmit={(event) => void save(event)}>
-        <div className="two-column-fields">
-          <label>Service name<input value={draft.name} placeholder="e.g. Deep-clean appointment" onChange={(event) => setDraft({ ...draft, name: event.target.value, slug: draft.slug || slugify(event.target.value) })} required /></label>
-          <label>Duration<select value={draft.durationMinutes} onChange={(event) => setDraft({ ...draft, durationMinutes: Number(event.target.value) })}><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={45}>45 minutes</option><option value={60}>1 hour</option><option value={90}>1.5 hours</option><option value={120}>2 hours</option></select></label>
+      {editing && (
+        <form className="form service-editor" onSubmit={(event) => void save(event)}>
+          <div className="two-column-fields">
+            <label>
+              Service name
+              <input
+                value={draft.name}
+                placeholder="e.g. Deep-clean appointment"
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    name: event.target.value,
+                    slug: draft.slug || slugify(event.target.value)
+                  })
+                }
+                required
+              />
+            </label>
+            <label>
+              Duration
+              <select
+                value={draft.durationMinutes}
+                onChange={(event) =>
+                  setDraft({ ...draft, durationMinutes: Number(event.target.value) })
+                }
+              >
+                <option value={15}>15 minutes</option>
+                <option value={30}>30 minutes</option>
+                <option value={45}>45 minutes</option>
+                <option value={60}>1 hour</option>
+                <option value={90}>1.5 hours</option>
+                <option value={120}>2 hours</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            What is included?
+            <textarea
+              value={draft.description}
+              placeholder="One plain-language sentence a caller would understand."
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+              required
+            />
+          </label>
+          <div className="two-column-fields">
+            <label>
+              Price shown to callers
+              <input
+                value={draft.priceLabel}
+                placeholder="e.g. €85 or Free"
+                onChange={(event) => setDraft({ ...draft, priceLabel: event.target.value })}
+                required
+              />
+            </label>
+            <label className="publish-toggle">
+              <input
+                type="checkbox"
+                checked={draft.isActive}
+                onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })}
+              />{' '}
+              Available for booking
+            </label>
+          </div>
+          {error && <p className="error">{error}</p>}
+          <div className="actions">
+            <button type="button" className="button secondary" onClick={reset}>
+              Cancel
+            </button>
+            <button className="button" disabled={saving}>
+              {saving ? 'Saving…' : 'Save service'}
+            </button>
+          </div>
+        </form>
+      )}
+      {services.length > 0 && (
+        <div className="workspace-service-list">
+          {services.map((service) => (
+            <article key={service.id}>
+              <div>
+                <h3>{service.name}</h3>
+                <p>{service.description}</p>
+                <span>
+                  {service.durationMinutes} min · {service.priceLabel}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setDraft({
+                    slug: service.slug,
+                    name: service.name,
+                    description: service.description,
+                    priceLabel: service.priceLabel,
+                    durationMinutes: service.durationMinutes,
+                    isActive: service.isActive
+                  });
+                  setEditing(true);
+                }}
+              >
+                Edit
+              </button>
+            </article>
+          ))}
         </div>
-        <label>What is included?<textarea value={draft.description} placeholder="One plain-language sentence a caller would understand." onChange={(event) => setDraft({ ...draft, description: event.target.value })} required /></label>
-        <div className="two-column-fields"><label>Price shown to callers<input value={draft.priceLabel} placeholder="e.g. €85 or Free" onChange={(event) => setDraft({ ...draft, priceLabel: event.target.value })} required /></label><label className="publish-toggle"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })} /> Available for booking</label></div>
-        {error && <p className="error">{error}</p>}
-        <div className="actions"><button type="button" className="button secondary" onClick={reset}>Cancel</button><button className="button" disabled={saving}>{saving ? 'Saving…' : 'Save service'}</button></div>
-      </form>}
-      {services.length > 0 && <div className="workspace-service-list">{services.map((service) => <article key={service.id}><div><h3>{service.name}</h3><p>{service.description}</p><span>{service.durationMinutes} min · {service.priceLabel}</span></div><button onClick={() => { setDraft({ slug: service.slug, name: service.name, description: service.description, priceLabel: service.priceLabel, durationMinutes: service.durationMinutes, isActive: service.isActive }); setEditing(true); }}>Edit</button></article>)}</div>}
+      )}
     </section>
   );
 }
 
 function KnowledgeHub() {
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [draft, setDraft] = useState<KnowledgeArticle>({
     slug: '',
     title: '',
@@ -996,8 +2375,11 @@ function KnowledgeHub() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const refresh = () =>
-    void getWorkspaceKnowledge()
-      .then(setArticles)
+    void Promise.all([getWorkspaceKnowledge(), getWorkspaceKnowledgeDocuments()])
+      .then(([nextArticles, nextDocuments]) => {
+        setArticles(nextArticles);
+        setDocuments(nextDocuments);
+      })
       .catch((reason: Error) => setError(reason.message));
   useEffect(refresh, []);
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -1021,91 +2403,212 @@ function KnowledgeHub() {
       setSaving(false);
     }
   }
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const file = new FormData(form).get('file');
+    if (!(file instanceof File) || !file.size) return;
+    setUploading(true);
+    setError('');
+    try {
+      await uploadWorkspaceKnowledgeDocument(file);
+      form.reset();
+      refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not upload document.');
+    } finally {
+      setUploading(false);
+    }
+  }
   return (
     <WorkspaceShell>
       <div className="knowledge-page">
         <header className="knowledge-page-header">
           <h1>Knowledge</h1>
-          <span>{articles.length} {articles.length === 1 ? 'item' : 'items'}</span>
+          <span>
+            {articles.length} {articles.length === 1 ? 'item' : 'items'}
+          </span>
         </header>
         <section className="knowledge-context-card">
-          <div className="knowledge-context-icon"><BookOpen /></div>
-          <div><h2>Approved answers</h2><p>Facts your receptionist can use.</p></div>
+          <div className="knowledge-context-icon">
+            <BookOpen />
+          </div>
+          <div>
+            <h2>Approved answers</h2>
+            <p>Facts your receptionist can use.</p>
+          </div>
         </section>
-        <div className="knowledge-layout">
         <section className="knowledge-form">
-          <div className="knowledge-form-heading"><BookOpen /><h2>Add knowledge</h2></div>
-          <form className="form" onSubmit={(event) => void save(event)}>
+          <div className="knowledge-form-heading">
+            <BookOpen />
+            <h2>Upload a document</h2>
+          </div>
+          <form className="form" onSubmit={(event) => void upload(event)}>
             <label>
-              Topic
+              PDF, DOCX, or UTF-8 TXT (up to 5 MB)
               <input
-                value={draft.title}
-                placeholder="e.g. Same-day appointments"
-                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                name="file"
+                type="file"
+                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                 required
               />
             </label>
-            <label>
-              Category
-              <select
-                value={draft.category}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    category: event.target.value as KnowledgeArticle['category']
-                  })
-                }
-              >
-                <option value="SERVICE">Service</option>
-                <option value="POLICY">Policy</option>
-                <option value="FAQ">FAQ</option>
-                <option value="COMPANY">Company</option>
-              </select>
-            </label>
-            <label>
-              Answer
-              <textarea
-                value={draft.content}
-                placeholder="The approved answer for customers."
-                minLength={20}
-                onChange={(event) => setDraft({ ...draft, content: event.target.value })}
-                required
-              />
-            </label>
-            <label className="publish-toggle">
-              <input
-                type="checkbox"
-                checked={draft.isActive}
-                onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })}
-              />{' '}Publish
-            </label>
-            {error && <p className="error">{error}</p>}
-            <button className="button" disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
+            <p>
+              Text is extracted for search. The original source file is discarded immediately and
+              cannot be downloaded.
+            </p>
+            <button className="button" disabled={uploading}>
+              {uploading ? 'Extracting…' : 'Upload document'}
             </button>
           </form>
         </section>
-        <section className="knowledge-list">
-          <div className="knowledge-list-heading"><BookOpen /><h2>Library</h2></div>
-          {articles.length === 0 ? (
-            <div className="empty-state knowledge-empty">
-              <BookOpen /><div><h3>No knowledge yet</h3><p>Add a question, policy, or service detail.</p></div>
+        <div className="knowledge-layout">
+          <section className="knowledge-form">
+            <div className="knowledge-form-heading">
+              <BookOpen />
+              <h2>Add knowledge</h2>
             </div>
-          ) : (
+            <form className="form" onSubmit={(event) => void save(event)}>
+              <label>
+                Topic
+                <input
+                  value={draft.title}
+                  placeholder="e.g. Same-day appointments"
+                  onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Category
+                <select
+                  value={draft.category}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      category: event.target.value as KnowledgeArticle['category']
+                    })
+                  }
+                >
+                  <option value="SERVICE">Service</option>
+                  <option value="POLICY">Policy</option>
+                  <option value="FAQ">FAQ</option>
+                  <option value="COMPANY">Company</option>
+                </select>
+              </label>
+              <label>
+                Answer
+                <textarea
+                  value={draft.content}
+                  placeholder="The approved answer for customers."
+                  minLength={20}
+                  onChange={(event) => setDraft({ ...draft, content: event.target.value })}
+                  required
+                />
+              </label>
+              <label className="publish-toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.isActive}
+                  onChange={(event) => setDraft({ ...draft, isActive: event.target.checked })}
+                />{' '}
+                Publish
+              </label>
+              {error && <p className="error">{error}</p>}
+              <button className="button" disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </form>
+          </section>
+          <section className="knowledge-list">
+            <div className="knowledge-list-heading">
+              <BookOpen />
+              <h2>Library</h2>
+            </div>
+            {articles.length === 0 ? (
+              <div className="empty-state knowledge-empty">
+                <BookOpen />
+                <div>
+                  <h3>No knowledge yet</h3>
+                  <p>Add a question, policy, or service detail.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="article-stack">
+                {articles.map((article) => (
+                  <article key={article.slug} className="knowledge-item">
+                    <div>
+                      <span className="badge">{article.category}</span>
+                      <h3>{article.title}</h3>
+                      <p>{article.content}</p>
+                      <small>{article.isActive ? 'Published' : 'Draft'}</small>
+                    </div>
+                    <div className="knowledge-actions">
+                      <button onClick={() => setDraft(article)}>Edit</button>
+                      <button
+                        onClick={() =>
+                          void deleteWorkspaceKnowledge(article.slug)
+                            .then(refresh)
+                            .catch((reason: Error) => setError(reason.message))
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+        {documents.length > 0 && (
+          <section className="knowledge-list">
+            <div className="knowledge-list-heading">
+              <BookOpen />
+              <h2>Uploaded sources</h2>
+            </div>
             <div className="article-stack">
-              {articles.map((article) => (
-                <article key={article.slug} className="knowledge-item">
+              {documents.map((document) => (
+                <article key={document.id} className="knowledge-item">
                   <div>
-                    <span className="badge">{article.category}</span>
-                    <h3>{article.title}</h3>
-                    <p>{article.content}</p>
-                    <small>{article.isActive ? 'Published' : 'Draft'}</small>
+                    <span className="badge">{document.category}</span>
+                    <h3>{document.title}</h3>
+                    <p>
+                      {document.filename} · {(document.byteCount / 1024).toFixed(1)} KB
+                      {document.pageCount ? ` · ${document.pageCount} pages` : ''}
+                    </p>
+                    <small>
+                      {document.isActive ? 'Published' : 'Inactive'} · Indexing:{' '}
+                      {document.indexingStatus}
+                    </small>
+                    {document.indexingError && <p className="error">{document.indexingError}</p>}
                   </div>
                   <div className="knowledge-actions">
-                    <button onClick={() => setDraft(article)}>Edit</button>
                     <button
                       onClick={() =>
-                        void deleteWorkspaceKnowledge(article.slug)
+                        void updateWorkspaceKnowledgeDocument(document.id, {
+                          isActive: !document.isActive
+                        })
+                          .then(refresh)
+                          .catch((reason: Error) => setError(reason.message))
+                      }
+                    >
+                      {document.isActive ? 'Deactivate' : 'Activate'}
+                    </button>
+                    {(document.indexingStatus === 'FAILED' ||
+                      document.indexingStatus === 'PENDING') && (
+                      <button
+                        onClick={() =>
+                          void reindexWorkspaceKnowledgeDocument(document.id)
+                            .then(refresh)
+                            .catch((reason: Error) => setError(reason.message))
+                        }
+                      >
+                        Retry
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        void deleteWorkspaceKnowledgeDocument(document.id)
                           .then(refresh)
                           .catch((reason: Error) => setError(reason.message))
                       }
@@ -1116,9 +2619,8 @@ function KnowledgeHub() {
                 </article>
               ))}
             </div>
-          )}
-        </section>
-        </div>
+          </section>
+        )}
       </div>
     </WorkspaceShell>
   );
@@ -1233,7 +2735,10 @@ function WorkspaceSettings() {
   useEffect(() => {
     void getWorkspace()
       .then(({ business }) =>
-        setSettings({ ...business, receptionistPersonaId: business.receptionistPersonaId || 'maya' })
+        setSettings({
+          ...business,
+          receptionistPersonaId: business.receptionistPersonaId || 'maya'
+        })
       )
       .catch((reason: Error) => setError(reason.message));
   }, []);
@@ -1255,65 +2760,94 @@ function WorkspaceSettings() {
   return (
     <WorkspaceShell>
       <div className="settings-page">
-      <header className="settings-page-header"><h1>Settings</h1></header>
-      {settings ? (
-        <form className="form summary workspace-settings-form" onSubmit={(event) => void save(event)}>
-          <section className="settings-voice-preview">
-            <img src={`/receptionists/${settings.receptionistPersonaId === 'random' ? 'maya' : settings.receptionistPersonaId}.png`} alt="Selected receptionist" />
-            <div><span>WHO ANSWERS?</span><strong>{settings.receptionistPersonaId === 'random' ? 'The Delia team' : `${settings.receptionistPersonaId.slice(0, 1).toUpperCase()}${settings.receptionistPersonaId.slice(1)}`}</strong></div>
-            <select value={settings.receptionistPersonaId} onChange={(event) => setSettings({ ...settings, receptionistPersonaId: event.target.value as WorkspaceSettings['receptionistPersonaId'] })} aria-label="Who should answer?">
-              <option value="random">Rotate the team</option>
-              <option value="maya">Maya</option>
-              <option value="sofia">Sofia</option>
-              <option value="john">John</option>
-              <option value="leo">Leo</option>
-            </select>
-          </section>
-          <label>
-            Who should answer?
-            <select
-              value={settings.receptionistPersonaId}
-              onChange={(event) =>
-                setSettings({
-                  ...settings,
-                  receptionistPersonaId: event.target.value as WorkspaceSettings['receptionistPersonaId']
-                })
-              }
-            >
-              <option value="random">Rotate the whole team</option>
-              <option value="maya">Maya — warm and reassuring</option>
-              <option value="sofia">Sofia — bright and attentive</option>
-              <option value="john">John — calm and direct</option>
-              <option value="leo">Leo — upbeat and relaxed</option>
-            </select>
-          </label>
-          <label>
-            Customer-facing greeting
-            <textarea
-              value={settings.greeting}
-              onChange={(event) => setSettings({ ...settings, greeting: event.target.value })}
-              maxLength={500}
-            />
-          </label>
-          <label>
-            Human handoff instructions
-            <textarea
-              value={settings.handoffInstructions}
-              onChange={(event) =>
-                setSettings({ ...settings, handoffInstructions: event.target.value })
-              }
-              maxLength={1200}
-            />
-          </label>
-          {error && <p className="error">{error}</p>}
-          {notice && <p className="success">{notice}</p>}
-          <button className="button" disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </form>
-      ) : (
-        <div className="empty-state"><Settings2 /><p>Loading your workspace settings…</p></div>
-      )}
+        <header className="settings-page-header">
+          <h1>Settings</h1>
+        </header>
+        {settings ? (
+          <form
+            className="form summary workspace-settings-form"
+            onSubmit={(event) => void save(event)}
+          >
+            <section className="settings-voice-preview">
+              <img
+                src={`/receptionists/${settings.receptionistPersonaId === 'random' ? 'maya' : settings.receptionistPersonaId}.png`}
+                alt="Selected receptionist"
+              />
+              <div>
+                <span>WHO ANSWERS?</span>
+                <strong>
+                  {settings.receptionistPersonaId === 'random'
+                    ? 'The Delia team'
+                    : `${settings.receptionistPersonaId.slice(0, 1).toUpperCase()}${settings.receptionistPersonaId.slice(1)}`}
+                </strong>
+              </div>
+              <select
+                value={settings.receptionistPersonaId}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    receptionistPersonaId: event.target
+                      .value as WorkspaceSettings['receptionistPersonaId']
+                  })
+                }
+                aria-label="Who should answer?"
+              >
+                <option value="random">Rotate the team</option>
+                <option value="maya">Maya</option>
+                <option value="sofia">Sofia</option>
+                <option value="john">John</option>
+                <option value="leo">Leo</option>
+              </select>
+            </section>
+            <label>
+              Who should answer?
+              <select
+                value={settings.receptionistPersonaId}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    receptionistPersonaId: event.target
+                      .value as WorkspaceSettings['receptionistPersonaId']
+                  })
+                }
+              >
+                <option value="random">Rotate the whole team</option>
+                <option value="maya">Maya — warm and reassuring</option>
+                <option value="sofia">Sofia — bright and attentive</option>
+                <option value="john">John — calm and direct</option>
+                <option value="leo">Leo — upbeat and relaxed</option>
+              </select>
+            </label>
+            <label>
+              Customer-facing greeting
+              <textarea
+                value={settings.greeting}
+                onChange={(event) => setSettings({ ...settings, greeting: event.target.value })}
+                maxLength={500}
+              />
+            </label>
+            <label>
+              Human handoff instructions
+              <textarea
+                value={settings.handoffInstructions}
+                onChange={(event) =>
+                  setSettings({ ...settings, handoffInstructions: event.target.value })
+                }
+                maxLength={1200}
+              />
+            </label>
+            {error && <p className="error">{error}</p>}
+            {notice && <p className="success">{notice}</p>}
+            <button className="button" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </form>
+        ) : (
+          <div className="empty-state">
+            <Settings2 />
+            <p>Loading your workspace settings…</p>
+          </div>
+        )}
       </div>
     </WorkspaceShell>
   );
@@ -1327,25 +2861,36 @@ function WebsiteWidget() {
   const [error, setError] = useState('');
   const [previewSession, setPreviewSession] = useState<string>();
   const [previewMessage, setPreviewMessage] = useState('');
-  const [previewMessages, setPreviewMessages] = useState<{ role: 'visitor' | 'assistant'; text: string }[]>([]);
+  const [previewMessages, setPreviewMessages] = useState<
+    { role: 'visitor' | 'assistant'; text: string }[]
+  >([]);
   const [transcripts, setTranscripts] = useState<WidgetTranscript[]>([]);
   const [testing, setTesting] = useState(false);
   const [confirmRotation, setConfirmRotation] = useState(false);
   const load = () => {
-    void getWorkspaceWidget().then((value) => {
-      setSettings(value);
-      setDomains(value.allowedOrigins.join('\n'));
-    }).catch((reason: Error) => setError(reason.message));
-    void getWorkspaceWidgetSessions().then(setTranscripts).catch(() => undefined);
+    void getWorkspaceWidget()
+      .then((value) => {
+        setSettings(value);
+        setDomains(value.allowedOrigins.join('\n'));
+      })
+      .catch((reason: Error) => setError(reason.message));
+    void getWorkspaceWidgetSessions()
+      .then(setTranscripts)
+      .catch(() => undefined);
   };
   useEffect(load, []);
   const update = <K extends keyof WidgetSettings>(key: K, value: WidgetSettings[K]) =>
-    setSettings((current) => current ? { ...current, [key]: value } : current);
+    setSettings((current) => (current ? { ...current, [key]: value } : current));
   async function save(regenerateKey = false) {
     if (!settings) return;
-    setSaving(true); setError(''); setNotice('');
+    setSaving(true);
+    setError('');
+    setNotice('');
     try {
-      const allowedOrigins = domains.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+      const allowedOrigins = domains
+        .split(/\r?\n/)
+        .map((value) => value.trim())
+        .filter(Boolean);
       const saved = await saveWorkspaceWidget({
         allowedOrigins,
         greeting: settings.greeting,
@@ -1353,61 +2898,259 @@ function WebsiteWidget() {
         isEnabled: settings.isEnabled,
         regenerateKey
       });
-      setSettings(saved); setDomains(saved.allowedOrigins.join('\n'));
-      trackUxEvent(regenerateKey ? 'widget_key_rotated' : 'widget_saved', { enabled: saved.isEnabled, origins: saved.allowedOrigins.length });
-      setNotice(regenerateKey ? 'New website key created. Replace the old snippet everywhere.' : 'Website widget settings saved.');
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not save website widget.'); }
-    finally { setSaving(false); }
+      setSettings(saved);
+      setDomains(saved.allowedOrigins.join('\n'));
+      trackUxEvent(regenerateKey ? 'widget_key_rotated' : 'widget_saved', {
+        enabled: saved.isEnabled,
+        origins: saved.allowedOrigins.length
+      });
+      setNotice(
+        regenerateKey
+          ? 'New website key created. Replace the old snippet everywhere.'
+          : 'Website widget settings saved.'
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save website widget.');
+    } finally {
+      setSaving(false);
+    }
   }
   async function startPreview() {
     if (!settings) return;
-    setTesting(true); setError('');
+    setTesting(true);
+    setError('');
     try {
       const result = await startPublicWidget(settings.publicKey);
       setPreviewSession(result.sessionId);
       setPreviewMessages([{ role: 'assistant', text: result.reply.displayText }]);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not start widget preview.'); }
-    finally { setTesting(false); }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not start widget preview.');
+    } finally {
+      setTesting(false);
+    }
   }
   async function sendPreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!settings || !previewSession || !previewMessage.trim() || testing) return;
     const message = previewMessage.trim();
-    setPreviewMessage(''); setPreviewMessages((items) => [...items, { role: 'visitor', text: message }]); setTesting(true);
+    setPreviewMessage('');
+    setPreviewMessages((items) => [...items, { role: 'visitor', text: message }]);
+    setTesting(true);
     try {
       const result = await chatPublicWidget(settings.publicKey, previewSession, message);
-      setPreviewMessages((items) => [...items, { role: 'assistant', text: result.reply.displayText }]);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send message.'); }
-    finally { setTesting(false); }
+      setPreviewMessages((items) => [
+        ...items,
+        { role: 'assistant', text: result.reply.displayText }
+      ]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not send message.');
+    } finally {
+      setTesting(false);
+    }
   }
-  const snippet = settings ? `<script src="${window.location.origin}/widget.js" data-business="${settings.publicKey}"></script>` : '';
+  const snippet = settings
+    ? `<script src="${window.location.origin}/widget.js" data-business="${settings.publicKey}"></script>`
+    : '';
   return (
     <WorkspaceShell>
       <div className="website-page">
-      <header className="website-page-header"><div><h1>Website</h1><p>Give every visitor an instant answer.</p></div><span className={settings?.isEnabled ? 'website-status live' : 'website-status'}>{settings?.isEnabled ? 'Live' : 'Draft'}</span></header>
-      {settings && <>
-        <section className="publish-steps"><span className="done">1 Configure</span><span>2 Preview</span><span>3 Install</span><span className={settings.isEnabled ? 'done' : ''}>{settings.isEnabled ? 'Live' : 'Not live'}</span></section>
-        <div className="widget-layout">
-          <section className="summary widget-config">
-            <div className="section-title"><div><h2>Widget controls</h2><p>Only websites you approve can use this key.</p></div><span className={settings.isEnabled ? 'badge' : 'badge muted'}>{settings.isEnabled ? 'Live' : 'Draft'}</span></div>
-            <div className="form">
-              <label>Allowed website origins<textarea value={domains} placeholder={'https://www.yourbusiness.com\nhttps://yourbusiness.com'} onChange={(event) => setDomains(event.target.value)} /><small>One exact origin per line. Add both www and non-www if you use both.</small></label>
-              <label>Welcome message<textarea value={settings.greeting} placeholder="Hi, how can we help today?" maxLength={500} onChange={(event) => update('greeting', event.target.value)} /></label>
-              <label>Accent color<input type="color" value={settings.brandColor} onChange={(event) => update('brandColor', event.target.value)} /></label>
-              <label className="publish-toggle"><input type="checkbox" checked={settings.isEnabled} onChange={(event) => update('isEnabled', event.target.checked)} /> Enable on approved websites</label>
-              {error && <p className="error">{error}</p>}{notice && <p className="success">{notice}</p>}
-              <div className="actions"><button className="button" onClick={() => void save()} disabled={saving}>{saving ? 'Saving…' : 'Save widget'}</button><button className="button secondary" onClick={() => setConfirmRotation(true)} disabled={saving}>Regenerate key</button></div>
-              {confirmRotation && <section className="danger-confirm"><strong>Replace the current website snippet?</strong><p>Regenerating the key disables every existing embed until you publish the new snippet.</p><div className="actions"><button className="button secondary" onClick={() => setConfirmRotation(false)} disabled={saving}>Keep current key</button><button className="button danger" onClick={() => { setConfirmRotation(false); void save(true); }} disabled={saving}>Regenerate and invalidate old key</button></div></section>}
+        <header className="website-page-header">
+          <div>
+            <h1>Website</h1>
+            <p>Give every visitor an instant answer.</p>
+          </div>
+          <span className={settings?.isEnabled ? 'website-status live' : 'website-status'}>
+            {settings?.isEnabled ? 'Live' : 'Draft'}
+          </span>
+        </header>
+        {settings && (
+          <>
+            <section className="publish-steps">
+              <span className="done">1 Configure</span>
+              <span>2 Preview</span>
+              <span>3 Install</span>
+              <span className={settings.isEnabled ? 'done' : ''}>
+                {settings.isEnabled ? 'Live' : 'Not live'}
+              </span>
+            </section>
+            <div className="widget-layout">
+              <section className="summary widget-config">
+                <div className="section-title">
+                  <div>
+                    <h2>Widget controls</h2>
+                    <p>Only websites you approve can use this key.</p>
+                  </div>
+                  <span className={settings.isEnabled ? 'badge' : 'badge muted'}>
+                    {settings.isEnabled ? 'Live' : 'Draft'}
+                  </span>
+                </div>
+                <div className="form">
+                  <label>
+                    Allowed website origins
+                    <textarea
+                      value={domains}
+                      placeholder={'https://www.yourbusiness.com\nhttps://yourbusiness.com'}
+                      onChange={(event) => setDomains(event.target.value)}
+                    />
+                    <small>
+                      One exact origin per line. Add both www and non-www if you use both.
+                    </small>
+                  </label>
+                  <label>
+                    Welcome message
+                    <textarea
+                      value={settings.greeting}
+                      placeholder="Hi, how can we help today?"
+                      maxLength={500}
+                      onChange={(event) => update('greeting', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Accent color
+                    <input
+                      type="color"
+                      value={settings.brandColor}
+                      onChange={(event) => update('brandColor', event.target.value)}
+                    />
+                  </label>
+                  <label className="publish-toggle">
+                    <input
+                      type="checkbox"
+                      checked={settings.isEnabled}
+                      onChange={(event) => update('isEnabled', event.target.checked)}
+                    />{' '}
+                    Enable on approved websites
+                  </label>
+                  {error && <p className="error">{error}</p>}
+                  {notice && <p className="success">{notice}</p>}
+                  <div className="actions">
+                    <button className="button" onClick={() => void save()} disabled={saving}>
+                      {saving ? 'Saving…' : 'Save widget'}
+                    </button>
+                    <button
+                      className="button secondary"
+                      onClick={() => setConfirmRotation(true)}
+                      disabled={saving}
+                    >
+                      Regenerate key
+                    </button>
+                  </div>
+                  {confirmRotation && (
+                    <section className="danger-confirm">
+                      <strong>Replace the current website snippet?</strong>
+                      <p>
+                        Regenerating the key disables every existing embed until you publish the new
+                        snippet.
+                      </p>
+                      <div className="actions">
+                        <button
+                          className="button secondary"
+                          onClick={() => setConfirmRotation(false)}
+                          disabled={saving}
+                        >
+                          Keep current key
+                        </button>
+                        <button
+                          className="button danger"
+                          onClick={() => {
+                            setConfirmRotation(false);
+                            void save(true);
+                          }}
+                          disabled={saving}
+                        >
+                          Regenerate and invalidate old key
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </section>
+              <section
+                className="widget-preview"
+                style={{ '--widget-accent': settings.brandColor } as React.CSSProperties}
+              >
+                <div className="widget-preview-top">
+                  <span>Preview</span>
+                  <span className="live-dot" />
+                </div>
+                {!previewSession ? (
+                  <div className="widget-preview-empty">
+                    <MessageSquareText />
+                    <h3>Test it before publishing.</h3>
+                    <p>This uses the same public API your website visitors will use.</p>
+                    <button
+                      className="button"
+                      onClick={() => void startPreview()}
+                      disabled={testing}
+                    >
+                      Open Delia
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="widget-preview-messages">
+                      {previewMessages.map((message, index) => (
+                        <p key={index} className={message.role}>
+                          {message.text}
+                        </p>
+                      ))}
+                    </div>
+                    <form
+                      className="widget-preview-composer"
+                      onSubmit={(event) => void sendPreview(event)}
+                    >
+                      <input
+                        value={previewMessage}
+                        onChange={(event) => setPreviewMessage(event.target.value)}
+                        placeholder="Ask a customer question…"
+                      />
+                      <button disabled={testing}>
+                        <Send size={16} />
+                      </button>
+                    </form>
+                  </>
+                )}
+              </section>
             </div>
-          </section>
-          <section className="widget-preview" style={{ '--widget-accent': settings.brandColor } as React.CSSProperties}>
-            <div className="widget-preview-top"><span>Preview</span><span className="live-dot" /></div>
-            {!previewSession ? <div className="widget-preview-empty"><MessageSquareText /><h3>Test it before publishing.</h3><p>This uses the same public API your website visitors will use.</p><button className="button" onClick={() => void startPreview()} disabled={testing}>Open Delia</button></div> : <><div className="widget-preview-messages">{previewMessages.map((message, index) => <p key={index} className={message.role}>{message.text}</p>)}</div><form className="widget-preview-composer" onSubmit={(event) => void sendPreview(event)}><input value={previewMessage} onChange={(event) => setPreviewMessage(event.target.value)} placeholder="Ask a customer question…" /><button disabled={testing}><Send size={16} /></button></form></>}
-          </section>
-        </div>
-        <section className="embed-card"><div><p className="eyebrow">Install</p><h2>Copy this into your website’s HTML, just before <code>&lt;/body&gt;</code>.</h2></div><pre><code>{snippet}</code></pre><button className="button secondary" onClick={() => void navigator.clipboard.writeText(snippet)}>Copy snippet</button></section>
-        <section className="widget-transcripts"><div className="section-title"><div><p className="eyebrow">Recent visitors</p><h2>Widget conversations</h2></div><button onClick={load}>Refresh</button></div>{transcripts.length === 0 ? <p className="interim">No website conversations yet.</p> : transcripts.map((session) => <article key={session.id}><strong>{session.origin}</strong><span>{new Date(session.createdAt).toLocaleString()}</span><p>{session.messages.at(-1)?.content || 'Conversation started'}</p></article>)}</section>
-      </>}
+            <section className="embed-card">
+              <div>
+                <p className="eyebrow">Install</p>
+                <h2>
+                  Copy this into your website’s HTML, just before <code>&lt;/body&gt;</code>.
+                </h2>
+              </div>
+              <pre>
+                <code>{snippet}</code>
+              </pre>
+              <button
+                className="button secondary"
+                onClick={() => void navigator.clipboard.writeText(snippet)}
+              >
+                Copy snippet
+              </button>
+            </section>
+            <section className="widget-transcripts">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Recent visitors</p>
+                  <h2>Widget conversations</h2>
+                </div>
+                <button onClick={load}>Refresh</button>
+              </div>
+              {transcripts.length === 0 ? (
+                <p className="interim">No website conversations yet.</p>
+              ) : (
+                transcripts.map((session) => (
+                  <article key={session.id}>
+                    <strong>{session.origin}</strong>
+                    <span>{new Date(session.createdAt).toLocaleString()}</span>
+                    <p>{session.messages.at(-1)?.content || 'Conversation started'}</p>
+                  </article>
+                ))
+              )}
+            </section>
+          </>
+        )}
       </div>
     </WorkspaceShell>
   );
@@ -1421,8 +3164,16 @@ function WorkspaceCrm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const refresh = () => {
-    void Promise.all([getWorkspaceCrmBookings(), getWorkspaceCrmCustomers(), getWorkspaceServices()])
-      .then(([nextBookings, nextCustomers, nextServices]) => { setBookings(nextBookings); setCustomers(nextCustomers); setServices(nextServices); })
+    void Promise.all([
+      getWorkspaceCrmBookings(),
+      getWorkspaceCrmCustomers(),
+      getWorkspaceServices()
+    ])
+      .then(([nextBookings, nextCustomers, nextServices]) => {
+        setBookings(nextBookings);
+        setCustomers(nextCustomers);
+        setServices(nextServices);
+      })
       .catch((reason: Error) => setError(reason.message));
   };
   useEffect(refresh, []);
@@ -1430,32 +3181,189 @@ function WorkspaceCrm() {
     event.preventDefault();
     if (!selected) return;
     const form = new FormData(event.currentTarget);
-    setSaving(true); setError('');
+    setSaving(true);
+    setError('');
     try {
       await updateWorkspaceCrmBooking(selected.id, {
-        name: String(form.get('name')), phone: String(form.get('phone')), serviceId: String(form.get('serviceId')),
-        appointmentAt: new Date(String(form.get('appointmentAt'))).toISOString(), notes: String(form.get('notes') || '')
+        name: String(form.get('name')),
+        phone: String(form.get('phone')),
+        serviceId: String(form.get('serviceId')),
+        appointmentAt: new Date(String(form.get('appointmentAt'))).toISOString(),
+        notes: String(form.get('notes') || '')
       });
-      setSelected(undefined); refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not update booking.'); }
-    finally { setSaving(false); }
+      setSelected(undefined);
+      refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not update booking.');
+    } finally {
+      setSaving(false);
+    }
   }
   async function cancel() {
     if (!selected || !window.confirm(`Cancel ${selected.customer.name}'s appointment?`)) return;
-    setSaving(true); setError('');
-    try { await cancelWorkspaceCrmBooking(selected.id); setSelected(undefined); refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not cancel booking.'); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setError('');
+    try {
+      await cancelWorkspaceCrmBooking(selected.id);
+      setSelected(undefined);
+      refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not cancel booking.');
+    } finally {
+      setSaving(false);
+    }
   }
   return (
     <WorkspaceShell>
-      <header className="crm-page-header"><div><h1>Bookings</h1></div><button onClick={refresh}>Refresh</button></header>
-      <div className="crm-stats"><article><span>Customers</span><strong>{customers.length}</strong></article><article><span>Open bookings</span><strong>{bookings.filter((booking) => booking.status === 'OPEN').length}</strong></article><article><span>Services</span><strong>{services.length}</strong></article></div>
-      <div className="crm-layout">
-        <section className="crm-bookings"><div className="section-title"><div><p className="eyebrow">Appointments</p><h2>Booking pipeline</h2></div><button onClick={refresh}>Refresh</button></div>{bookings.length === 0 ? <div className="empty-state"><CalendarDays /><h3>No bookings yet.</h3><p>Confirmed appointments from Delia will appear here automatically.</p></div> : <div className="crm-list">{bookings.map((booking) => <button key={booking.id} className={selected?.id === booking.id ? 'selected' : ''} onClick={() => setSelected(booking)}><span className={`crm-status ${booking.status.toLowerCase()}`}>{booking.status}</span><strong>{booking.customer.name}</strong><small>{booking.service.name} · {new Date(booking.appointmentAt).toLocaleString()}</small></button>)}</div>}</section>
-        <section className="summary crm-editor">{selected ? <form className="form" onSubmit={(event) => void save(event)}><div className="section-title"><div><p className="eyebrow">Edit appointment</p><h2>{selected.customer.name}</h2></div><button type="button" onClick={() => setSelected(undefined)}>Close</button></div><label>Name<input name="name" defaultValue={selected.customer.name} required /></label><label>Phone<input name="phone" defaultValue={selected.customer.phone} required /></label><label>Service<select name="serviceId" defaultValue={selected.service.id}>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} min</option>)}</select></label><label>Appointment time<input name="appointmentAt" type="datetime-local" defaultValue={selected.appointmentAt.slice(0, 16)} required /></label><label>Internal note<textarea name="notes" defaultValue={selected.notes || ''} /></label>{error && <p className="error">{error}</p>}<div className="actions"><button className="button" disabled={saving || selected.status !== 'OPEN'}>{saving ? 'Saving…' : 'Save changes'}</button>{selected.status === 'OPEN' && <button type="button" className="button secondary danger" onClick={() => void cancel()} disabled={saving}>Cancel booking</button>}</div></form> : <div className="empty-state"><CalendarDays /><h3>Select an appointment.</h3><p>See the details and make a controlled change without leaving your workspace.</p></div>}</section>
+      <header className="crm-page-header">
+        <div>
+          <h1>Bookings</h1>
+        </div>
+        <button onClick={refresh}>Refresh</button>
+      </header>
+      <div className="crm-stats">
+        <article>
+          <span>Customers</span>
+          <strong>{customers.length}</strong>
+        </article>
+        <article>
+          <span>Open bookings</span>
+          <strong>{bookings.filter((booking) => booking.status === 'OPEN').length}</strong>
+        </article>
+        <article>
+          <span>Services</span>
+          <strong>{services.length}</strong>
+        </article>
       </div>
-      <section className="crm-customers"><div className="section-title"><div><p className="eyebrow">Customers</p><h2>People Delia has helped</h2></div></div>{customers.length === 0 ? <p className="interim">Customers appear after the first confirmed booking.</p> : <div>{customers.map((customer) => <article key={customer.id}><strong>{customer.name}</strong><span>{customer.email} · {customer.phone}</span><small>{customer._count.bookings} booking{customer._count.bookings === 1 ? '' : 's'}</small></article>)}</div>}</section>
+      <div className="crm-layout">
+        <section className="crm-bookings">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Appointments</p>
+              <h2>Booking pipeline</h2>
+            </div>
+            <button onClick={refresh}>Refresh</button>
+          </div>
+          {bookings.length === 0 ? (
+            <div className="empty-state">
+              <CalendarDays />
+              <h3>No bookings yet.</h3>
+              <p>Confirmed appointments from Delia will appear here automatically.</p>
+            </div>
+          ) : (
+            <div className="crm-list">
+              {bookings.map((booking) => (
+                <button
+                  key={booking.id}
+                  className={selected?.id === booking.id ? 'selected' : ''}
+                  onClick={() => setSelected(booking)}
+                >
+                  <span className={`crm-status ${booking.status.toLowerCase()}`}>
+                    {booking.status}
+                  </span>
+                  <strong>{booking.customer.name}</strong>
+                  <small>
+                    {booking.service.name} · {new Date(booking.appointmentAt).toLocaleString()}
+                  </small>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+        <section className="summary crm-editor">
+          {selected ? (
+            <form className="form" onSubmit={(event) => void save(event)}>
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Edit appointment</p>
+                  <h2>{selected.customer.name}</h2>
+                </div>
+                <button type="button" onClick={() => setSelected(undefined)}>
+                  Close
+                </button>
+              </div>
+              <label>
+                Name
+                <input name="name" defaultValue={selected.customer.name} required />
+              </label>
+              <label>
+                Phone
+                <input name="phone" defaultValue={selected.customer.phone} required />
+              </label>
+              <label>
+                Service
+                <select name="serviceId" defaultValue={selected.service.id}>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>
+                      {service.name} · {service.durationMinutes} min
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Appointment time
+                <input
+                  name="appointmentAt"
+                  type="datetime-local"
+                  defaultValue={selected.appointmentAt.slice(0, 16)}
+                  required
+                />
+              </label>
+              <label>
+                Internal note
+                <textarea name="notes" defaultValue={selected.notes || ''} />
+              </label>
+              {error && <p className="error">{error}</p>}
+              <div className="actions">
+                <button className="button" disabled={saving || selected.status !== 'OPEN'}>
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+                {selected.status === 'OPEN' && (
+                  <button
+                    type="button"
+                    className="button secondary danger"
+                    onClick={() => void cancel()}
+                    disabled={saving}
+                  >
+                    Cancel booking
+                  </button>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div className="empty-state">
+              <CalendarDays />
+              <h3>Select an appointment.</h3>
+              <p>See the details and make a controlled change without leaving your workspace.</p>
+            </div>
+          )}
+        </section>
+      </div>
+      <section className="crm-customers">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">Customers</p>
+            <h2>People Delia has helped</h2>
+          </div>
+        </div>
+        {customers.length === 0 ? (
+          <p className="interim">Customers appear after the first confirmed booking.</p>
+        ) : (
+          <div>
+            {customers.map((customer) => (
+              <article key={customer.id}>
+                <strong>{customer.name}</strong>
+                <span>
+                  {customer.email} · {customer.phone}
+                </span>
+                <small>
+                  {customer._count.bookings} booking{customer._count.bookings === 1 ? '' : 's'}
+                </small>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </WorkspaceShell>
   );
 }
@@ -1581,14 +3489,31 @@ function BookingPage() {
           <h2>{selectedService?.name || 'Appointment'}</h2>
           <p>{selected ? formatTime(selected) : 'No time selected'}</p>
           <dl>
-            <div><dt>Name</dt><dd>{bookingInput.name}</dd></div>
-            <div><dt>Email</dt><dd>{bookingInput.email}</dd></div>
-            <div><dt>Phone</dt><dd>{bookingInput.phone}</dd></div>
+            <div>
+              <dt>Name</dt>
+              <dd>{bookingInput.name}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{bookingInput.email}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{bookingInput.phone}</dd>
+            </div>
           </dl>
-          {bookingInput.notes && <p><strong>Note:</strong> {bookingInput.notes}</p>}
+          {bookingInput.notes && (
+            <p>
+              <strong>Note:</strong> {bookingInput.notes}
+            </p>
+          )}
           <div className="actions">
-            <button className="button secondary" onClick={() => setReview(false)} disabled={saving}>Edit details</button>
-            <button className="button" onClick={() => void confirmBooking()} disabled={saving}>Confirm appointment</button>
+            <button className="button secondary" onClick={() => setReview(false)} disabled={saving}>
+              Edit details
+            </button>
+            <button className="button" onClick={() => void confirmBooking()} disabled={saving}>
+              Confirm appointment
+            </button>
           </div>
           <small>You will receive a secure link to manage or cancel this appointment.</small>
         </section>
@@ -1598,7 +3523,9 @@ function BookingPage() {
     <main className="page narrow booking-page">
       <p className="eyebrow">Book online · Step {selected ? '2' : '1'} of 3</p>
       <h1>Reserve an appointment.</h1>
-      <p className="booking-lead">Choose a service and time first. Your details are reviewed before anything is confirmed.</p>
+      <p className="booking-lead">
+        Choose a service and time first. Your details are reviewed before anything is confirmed.
+      </p>
       <form onSubmit={submit} className="form">
         <label>
           Service
@@ -1622,22 +3549,34 @@ function BookingPage() {
           <legend>Choose a day, then a time</legend>
           <div className="date-picker" aria-label="Available days">
             {availableDates.map((date) => (
-              <button type="button" className={selectedDate === date ? 'selected' : ''} onClick={() => { setSelectedDate(date); setSelected(''); }} key={date}>
-                {new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`))}
+              <button
+                type="button"
+                className={selectedDate === date ? 'selected' : ''}
+                onClick={() => {
+                  setSelectedDate(date);
+                  setSelected('');
+                }}
+                key={date}
+              >
+                {new Intl.DateTimeFormat('en', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric'
+                }).format(new Date(`${date}T12:00:00`))}
               </button>
             ))}
           </div>
           <div className="slots">
             {visibleSlots.map((slot) => (
-                <button
-                  type="button"
-                  className={selected === slot.startAt ? 'slot selected' : 'slot'}
-                  onClick={() => setSelected(slot.startAt)}
-                  key={slot.startAt}
-                >
-                  {formatTime(slot.startAt)}
-                </button>
-              ))}
+              <button
+                type="button"
+                className={selected === slot.startAt ? 'slot selected' : 'slot'}
+                onClick={() => setSelected(slot.startAt)}
+                key={slot.startAt}
+              >
+                {formatTime(slot.startAt)}
+              </button>
+            ))}
           </div>
         </fieldset>
         <label>
@@ -1657,7 +3596,10 @@ function BookingPage() {
           <textarea name="notes" maxLength={500} />
         </label>
         {error && <p className="error">{error}</p>}
-        <p className="booking-trust">Your information is used only to arrange this appointment. You can change or cancel later from your secure link.</p>
+        <p className="booking-trust">
+          Your information is used only to arrange this appointment. You can change or cancel later
+          from your secure link.
+        </p>
         <button className="button" disabled={saving || !selected}>
           {saving ? 'Creating booking…' : 'Confirm booking'}
         </button>
@@ -2019,9 +3961,9 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
     }
     setSending(true);
     try {
-      const draft = await (workspaceMode
-        ? prepareWorkspaceReceptionistBooking
-        : prepareReceptionistBooking)(activeSession, {
+      const draft = await (
+        workspaceMode ? prepareWorkspaceReceptionistBooking : prepareReceptionistBooking
+      )(activeSession, {
         name: details.name,
         email: details.email,
         phone: details.phone,
@@ -2049,9 +3991,9 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
     if (!activeSession || !bookingDraft) return;
     setSending(true);
     try {
-      const completed = await (workspaceMode
-        ? confirmWorkspaceReceptionistBooking
-        : confirmReceptionistBooking)(activeSession, bookingDraft.draftId);
+      const completed = await (
+        workspaceMode ? confirmWorkspaceReceptionistBooking : confirmReceptionistBooking
+      )(activeSession, bookingDraft.draftId);
       setCompletedBooking(completed);
       setStage('completed');
       setStatus(`Booked for ${formatTime(completed.booking.appointmentAt)}.`);
@@ -2091,7 +4033,9 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
         voice.endSession();
         return;
       }
-      const result = await (workspaceMode ? startWorkspaceReceptionistCall() : startReceptionistCall());
+      const result = await (workspaceMode
+        ? startWorkspaceReceptionistCall()
+        : startReceptionistCall());
       trackUxEvent('receptionist_call_started', { workspace_mode: workspaceMode });
       if (callAttemptRef.current !== attempt) {
         voice.endSession();
@@ -2158,7 +4102,8 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
     }
   }
   function endCallDragFromWindow() {
-    if (callButtonRef.current?.hasPointerCapture?.(0)) callButtonRef.current.releasePointerCapture(0);
+    if (callButtonRef.current?.hasPointerCapture?.(0))
+      callButtonRef.current.releasePointerCapture(0);
     finishCallDrag();
   }
 
@@ -2312,9 +4257,29 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
         <div className="demo-heading">
           <p className="eyebrow">Live product demo</p>
           <h1>Talk to Delia as if you were a customer.</h1>
-          <p>Ask about a service, opening hours, or try to make a booking. Delia will speak back and keep a live record of the call.</p>
+          <p>
+            Ask about a service, opening hours, or try to make a booking. Delia will speak back and
+            keep a live record of the call.
+          </p>
         </div>
-        {!calling && <section className="call-start-card"><div><strong>Before you call</strong><p>Your browser will ask for microphone access. Nothing is booked without a clear confirmation.</p></div><div className="call-examples"><span>Try asking</span><button onClick={() => void beginCall()}>“Do you have anything Tuesday afternoon?”</button><button onClick={() => void beginCall()}>“What services do you offer?”</button></div></section>}
+        {!calling && (
+          <section className="call-start-card">
+            <div>
+              <strong>Before you call</strong>
+              <p>
+                Your browser will ask for microphone access. Nothing is booked without a clear
+                confirmation.
+              </p>
+            </div>
+            <div className="call-examples">
+              <span>Try asking</span>
+              <button onClick={() => void beginCall()}>
+                “Do you have anything Tuesday afternoon?”
+              </button>
+              <button onClick={() => void beginCall()}>“What services do you offer?”</button>
+            </div>
+          </section>
+        )}
         {calling && receptionistName && (
           <p className="eyebrow">{receptionistName} is on the line</p>
         )}
@@ -2322,20 +4287,42 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
           <div className={`call-phone ${calling ? 'is-calling' : ''}`}>
             <span className="call-phone-speaker" />
             <div className="call-phone-avatar">
-              {calling && receptionistId ? <img src={`/receptionists/${receptionistId}.png`} alt={`${receptionistName || 'Receptionist'} on the call`} /> : <Headphones />}
+              {calling && receptionistId ? (
+                <img
+                  src={`/receptionists/${receptionistId}.png`}
+                  alt={`${receptionistName || 'Receptionist'} on the call`}
+                />
+              ) : (
+                <Headphones />
+              )}
             </div>
             <strong>{calling ? receptionistName || 'Delia' : 'Delia'}</strong>
             <span>{calling ? 'Connected' : 'AI receptionist'}</span>
-            <div className="call-phone-wave" aria-hidden="true"><i /><i /><i /><i /><i /></div>
-            <div className="call-phone-drag-hint" aria-hidden="true"><ChevronUp size={15} /><ChevronUp size={15} /></div>
+            <div className="call-phone-wave" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="call-phone-drag-hint" aria-hidden="true">
+              <ChevronUp size={15} />
+              <ChevronUp size={15} />
+            </div>
             <button
               ref={callButtonRef}
               className={`call-phone-button ${calling ? 'hangup' : ''}`}
-              style={!calling ? { transform: `translateX(-50%) translateY(${-callDrag}px) rotate(-10deg)` } : undefined}
+              style={
+                !calling
+                  ? { transform: `translateX(-50%) translateY(${-callDrag}px) rotate(-10deg)` }
+                  : undefined
+              }
               onClick={calling ? hangUp : startCallFromButton}
               disabled={!calling && sending}
               aria-label={calling ? 'Hang up' : 'Start a call with Delia'}
-            ><PhoneCall size={25} /></button>
+            >
+              <PhoneCall size={25} />
+            </button>
           </div>
         </section>
         <section className="voice-controls">
@@ -2387,7 +4374,17 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
         <p className="interim" aria-live="polite">
           {status}
         </p>
-        {calling && <section className="call-transcript" aria-live="polite"><strong>Live call notes</strong><p>{voice.lastTranscript ? `You said: ${voice.lastTranscript}` : 'Listening for your first question...'}</p><p>Delia: {status}</p></section>}
+        {calling && (
+          <section className="call-transcript" aria-live="polite">
+            <strong>Live call notes</strong>
+            <p>
+              {voice.lastTranscript
+                ? `You said: ${voice.lastTranscript}`
+                : 'Listening for your first question...'}
+            </p>
+            <p>Delia: {status}</p>
+          </section>
+        )}
         {calling && (
           <form className="call-message-form" onSubmit={submitCallMessage}>
             <label htmlFor="call-message">Say it by text</label>
@@ -2548,22 +4545,93 @@ function WorkspaceInbox() {
   const [sessions, setSessions] = useState<WidgetTranscript[]>([]);
   useEffect(() => {
     void Promise.all([getWorkspaceCrmBookings(), getWorkspaceWidgetSessions()])
-      .then(([nextBookings, nextSessions]) => { setBookings(nextBookings); setSessions(nextSessions); })
+      .then(([nextBookings, nextSessions]) => {
+        setBookings(nextBookings);
+        setSessions(nextSessions);
+      })
       .catch(() => undefined);
   }, []);
   const openBookings = bookings.filter((booking) => booking.status === 'OPEN').slice(0, 6);
   return (
     <WorkspaceShell>
       <div className="inbox-page">
-        <header className="inbox-page-header"><h1>Inbox</h1><span>{openBookings.length + sessions.length}</span></header>
+        <header className="inbox-page-header">
+          <h1>Inbox</h1>
+          <span>{openBookings.length + sessions.length}</span>
+        </header>
         <section className="inbox-grid">
           <article className="inbox-panel">
-            <div className="inbox-panel-header"><div><CalendarDays /><h2>Bookings</h2></div><Link to="/dashboard/crm">View calendar <ArrowRight size={15} /></Link></div>
-            {openBookings.length ? <div className="inbox-booking-list">{openBookings.map((booking) => <Link key={booking.id} to="/dashboard/crm"><time>{new Date(booking.appointmentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time><div><strong>{booking.customer.name}</strong><span>{booking.service.name}</span></div><ArrowRight size={15} /></Link>)}</div> : <div className="inbox-empty"><CalendarDays /><span>No upcoming bookings</span></div>}
+            <div className="inbox-panel-header">
+              <div>
+                <CalendarDays />
+                <h2>Bookings</h2>
+              </div>
+              <Link to="/dashboard/crm">
+                View calendar <ArrowRight size={15} />
+              </Link>
+            </div>
+            {openBookings.length ? (
+              <div className="inbox-booking-list">
+                {openBookings.map((booking) => (
+                  <Link key={booking.id} to="/dashboard/crm">
+                    <time>
+                      {new Date(booking.appointmentAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </time>
+                    <div>
+                      <strong>{booking.customer.name}</strong>
+                      <span>{booking.service.name}</span>
+                    </div>
+                    <ArrowRight size={15} />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="inbox-empty">
+                <CalendarDays />
+                <span>No upcoming bookings</span>
+              </div>
+            )}
           </article>
           <article className="inbox-panel">
-            <div className="inbox-panel-header"><div><MessageSquareText /><h2>Website conversations</h2></div><Link to="/dashboard/widget">Open website <ArrowRight size={15} /></Link></div>
-            {sessions.length ? <div className="inbox-conversation-list">{sessions.slice(0, 6).map((session) => <Link key={session.id} to="/dashboard/widget"><span className="inbox-origin">{session.origin.replace(/^https?:\/\//, '').replace(/^www\./, '').slice(0, 1).toUpperCase()}</span><div><strong>{session.origin.replace(/^https?:\/\//, '').replace(/^www\./, '')}</strong><span>{session.messages.at(-1)?.content || 'Conversation started'}</span></div><time>{new Date(session.createdAt).toLocaleDateString()}</time></Link>)}</div> : <div className="inbox-empty"><MessageSquareText /><span>No website conversations</span></div>}
+            <div className="inbox-panel-header">
+              <div>
+                <MessageSquareText />
+                <h2>Website conversations</h2>
+              </div>
+              <Link to="/dashboard/widget">
+                Open website <ArrowRight size={15} />
+              </Link>
+            </div>
+            {sessions.length ? (
+              <div className="inbox-conversation-list">
+                {sessions.slice(0, 6).map((session) => (
+                  <Link key={session.id} to="/dashboard/widget">
+                    <span className="inbox-origin">
+                      {session.origin
+                        .replace(/^https?:\/\//, '')
+                        .replace(/^www\./, '')
+                        .slice(0, 1)
+                        .toUpperCase()}
+                    </span>
+                    <div>
+                      <strong>
+                        {session.origin.replace(/^https?:\/\//, '').replace(/^www\./, '')}
+                      </strong>
+                      <span>{session.messages.at(-1)?.content || 'Conversation started'}</span>
+                    </div>
+                    <time>{new Date(session.createdAt).toLocaleDateString()}</time>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="inbox-empty">
+                <MessageSquareText />
+                <span>No website conversations</span>
+              </div>
+            )}
           </article>
         </section>
       </div>
@@ -2576,24 +4644,67 @@ function ReceptionistBuilder() {
     <WorkspaceShell>
       <div className="receptionist-hub">
         <section className="receptionist-hub-header">
-          <div><h1>Receptionist</h1></div>
+          <div>
+            <h1>Receptionist</h1>
+          </div>
         </section>
 
         <section className="receptionist-hero-card">
-          <div className="receptionist-hero-copy"><span>YOUR AI FRONT DESK</span><h2>Every caller gets your best answer.</h2><p>Delia answers, books, and follows your rules — around the clock.</p><Link className="receptionist-hero-cta" to="/dashboard/receptionist/call"><PhoneCall size={16} /> Test a live call</Link></div>
+          <div className="receptionist-hero-copy">
+            <span>YOUR AI FRONT DESK</span>
+            <h2>Every caller gets your best answer.</h2>
+            <p>Delia answers, books, and follows your rules — around the clock.</p>
+            <Link className="receptionist-hero-cta" to="/dashboard/receptionist/call">
+              <PhoneCall size={16} /> Test a live call
+            </Link>
+          </div>
           <div className="receptionist-live-preview" aria-label="Receptionist capabilities">
-            <div className="receptionist-live-orb"><Headphones /></div>
-            <span><MessageSquareText size={16} /> Answer</span>
-            <span><CalendarDays size={16} /> Book</span>
-            <span><CheckCircle2 size={16} /> Confirm</span>
+            <div className="receptionist-live-orb">
+              <Headphones />
+            </div>
+            <span>
+              <MessageSquareText size={16} /> Answer
+            </span>
+            <span>
+              <CalendarDays size={16} /> Book
+            </span>
+            <span>
+              <CheckCircle2 size={16} /> Confirm
+            </span>
           </div>
         </section>
 
         <section className="receptionist-setup" aria-label="Receptionist setup">
-          <div className="receptionist-setup-heading"><div><span>Build the experience</span><small>Give Delia the context to sound like your business.</small></div><strong>01 — 02</strong></div>
+          <div className="receptionist-setup-heading">
+            <div>
+              <span>Build the experience</span>
+              <small>Give Delia the context to sound like your business.</small>
+            </div>
+            <strong>01 — 02</strong>
+          </div>
           <div className="receptionist-setup-grid">
-            <Link to="/dashboard/business"><span className="receptionist-setup-step">01</span><span className="receptionist-setup-icon"><Building2 /></span><div><h2>Business context</h2><p>Services, policies, and booking rules.</p></div><ArrowRight size={17} /></Link>
-            <Link to="/dashboard/knowledge"><span className="receptionist-setup-step">02</span><span className="receptionist-setup-icon"><BookOpen /></span><div><h2>Knowledge</h2><p>Answers your team has approved.</p></div><ArrowRight size={17} /></Link>
+            <Link to="/dashboard/business">
+              <span className="receptionist-setup-step">01</span>
+              <span className="receptionist-setup-icon">
+                <Building2 />
+              </span>
+              <div>
+                <h2>Business context</h2>
+                <p>Services, policies, and booking rules.</p>
+              </div>
+              <ArrowRight size={17} />
+            </Link>
+            <Link to="/dashboard/knowledge">
+              <span className="receptionist-setup-step">02</span>
+              <span className="receptionist-setup-icon">
+                <BookOpen />
+              </span>
+              <div>
+                <h2>Knowledge</h2>
+                <p>Answers your team has approved.</p>
+              </div>
+              <ArrowRight size={17} />
+            </Link>
           </div>
         </section>
       </div>
@@ -2603,7 +4714,9 @@ function ReceptionistBuilder() {
 
 function WorkspaceReceptionist() {
   return (
-    <WorkspaceShell><ReceptionistPage workspaceMode /></WorkspaceShell>
+    <WorkspaceShell>
+      <ReceptionistPage workspaceMode />
+    </WorkspaceShell>
   );
 }
 

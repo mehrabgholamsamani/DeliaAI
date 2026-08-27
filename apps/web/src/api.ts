@@ -53,7 +53,7 @@ async function request<T>(
     ...options,
     credentials: 'include',
     headers: {
-      'content-type': 'application/json',
+      ...(options.body instanceof FormData ? {} : { 'content-type': 'application/json' }),
       ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}),
       ...(adminToken ? { 'x-admin-token': adminToken } : {}),
       ...options.headers
@@ -65,6 +65,7 @@ async function request<T>(
       typeof body?.message === 'string' ? body.message : `Request failed (${response.status})`
     );
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -162,22 +163,38 @@ export type WidgetTranscript = {
   messages: { role: 'VISITOR' | 'ASSISTANT'; content: string; createdAt: string }[];
 };
 export const getWorkspaceWidget = () => request<WidgetSettings>('/workspace/widget');
-export const saveWorkspaceWidget = (input: Omit<WidgetSettings, 'id' | 'publicKey'> & { regenerateKey?: boolean }) =>
-  request<WidgetSettings>('/workspace/widget', { method: 'PUT', body: JSON.stringify(input) });
-export const getWorkspaceWidgetSessions = () => request<WidgetTranscript[]>('/workspace/widget/sessions');
+export const saveWorkspaceWidget = (
+  input: Omit<WidgetSettings, 'id' | 'publicKey'> & { regenerateKey?: boolean }
+) => request<WidgetSettings>('/workspace/widget', { method: 'PUT', body: JSON.stringify(input) });
+export const getWorkspaceWidgetSessions = () =>
+  request<WidgetTranscript[]>('/workspace/widget/sessions');
 export type PublicWidgetConfig = {
   businessName: string;
   greeting: string;
   brandColor: string;
   services: Pick<Service, 'id' | 'name' | 'description' | 'durationMinutes' | 'priceLabel'>[];
 };
-export const getPublicWidgetConfig = (key: string) => request<PublicWidgetConfig>(`/public/widget/config?key=${encodeURIComponent(key)}`);
-export const startPublicWidget = (key: string) => request<{ sessionId: string; reply: ReceptionistReply }>('/public/widget/sessions', { method: 'POST', body: JSON.stringify({ key }) });
-export const chatPublicWidget = (key: string, sessionId: string, message: string) => request<{ sessionId: string; reply: ReceptionistReply }>('/public/widget/chat', { method: 'POST', body: JSON.stringify({ key, sessionId, message }) });
+export const getPublicWidgetConfig = (key: string) =>
+  request<PublicWidgetConfig>(`/public/widget/config?key=${encodeURIComponent(key)}`);
+export const startPublicWidget = (key: string) =>
+  request<{ sessionId: string; reply: ReceptionistReply }>('/public/widget/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ key })
+  });
+export const chatPublicWidget = (key: string, sessionId: string, message: string) =>
+  request<{ sessionId: string; reply: ReceptionistReply }>('/public/widget/chat', {
+    method: 'POST',
+    body: JSON.stringify({ key, sessionId, message })
+  });
 export const getWorkspaceAvailability = (serviceId: string, start: string) =>
-  request<Availability>(`/workspace/availability?serviceId=${encodeURIComponent(serviceId)}&start=${start}&days=7`);
+  request<Availability>(
+    `/workspace/availability?serviceId=${encodeURIComponent(serviceId)}&start=${start}&days=7`
+  );
 export const startWorkspaceReceptionistCall = () =>
-  request<{ sessionId: string; reply: ReceptionistReply }>('/workspace/calls', { method: 'POST', body: JSON.stringify({}) });
+  request<{ sessionId: string; reply: ReceptionistReply }>('/workspace/calls', {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
 export const getWorkspaceKnowledge = () => request<KnowledgeArticle[]>('/workspace/knowledge');
 export const saveWorkspaceKnowledge = (article: KnowledgeArticle) =>
   request<KnowledgeArticle>('/workspace/knowledge', {
@@ -188,6 +205,42 @@ export const deleteWorkspaceKnowledge = (slug: string) =>
   request<KnowledgeArticle>(`/workspace/knowledge/${encodeURIComponent(slug)}`, {
     method: 'DELETE'
   });
+export type KnowledgeDocument = {
+  id: string;
+  title: string;
+  filename: string;
+  mimeType: string;
+  category: KnowledgeArticle['category'];
+  byteCount: number;
+  pageCount?: number | null;
+  isActive: boolean;
+  indexingStatus: 'PENDING' | 'INDEXING' | 'READY' | 'FAILED';
+  indexingError?: string | null;
+};
+export const getWorkspaceKnowledgeDocuments = () =>
+  request<KnowledgeDocument[]>('/workspace/knowledge/documents');
+export const uploadWorkspaceKnowledgeDocument = (file: File, title?: string, category = 'FAQ') => {
+  const body = new FormData();
+  body.append('file', file);
+  if (title) body.append('title', title);
+  body.append('category', category);
+  return request<KnowledgeDocument>('/workspace/knowledge/documents', { method: 'POST', body });
+};
+export const updateWorkspaceKnowledgeDocument = (
+  id: string,
+  input: Partial<Pick<KnowledgeDocument, 'title' | 'category' | 'isActive'>>
+) =>
+  request<KnowledgeDocument>(`/workspace/knowledge/documents/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input)
+  });
+export const deleteWorkspaceKnowledgeDocument = (id: string) =>
+  request<void>(`/workspace/knowledge/documents/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const reindexWorkspaceKnowledgeDocument = (id: string) =>
+  request<{ status: 'PENDING' }>(
+    `/workspace/knowledge/documents/${encodeURIComponent(id)}/reindex`,
+    { method: 'POST', body: '{}' }
+  );
 export const chatWithWorkspaceReceptionist = (message: string, sessionId?: string) =>
   request<{ sessionId: string; reply: ReceptionistReply }>('/workspace/chat', {
     method: 'POST',
@@ -249,6 +302,8 @@ export type KnowledgeArticle = {
   category: 'COMPANY' | 'SERVICE' | 'POLICY' | 'FAQ' | 'PROMOTION' | 'INTERNAL';
   sourceLabel?: string | null;
   isActive: boolean;
+  indexingStatus?: 'PENDING' | 'INDEXING' | 'READY' | 'FAILED';
+  indexingError?: string | null;
 };
 export const getReceptionistSettings = (token: string) =>
   request<ReceptionistSettings>('/admin/receptionist-settings', {}, token);
@@ -320,6 +375,7 @@ export type ReceptionistReply = {
     workflowStatus: 'idle' | 'active' | 'paused';
   };
   citedKnowledgeIds: string[];
+  citations?: { id: string; label: string; sourceType: 'ARTICLE' | 'DOCUMENT'; category: string }[];
   receptionist?: { id: string; name: string };
   bookingDetails?: {
     name?: string;
@@ -397,10 +453,24 @@ export const prepareReceptionistBooking = (
   });
 export const prepareWorkspaceReceptionistBooking = (
   sessionId: string,
-  payload: { name: string; email: string; phone: string; serviceId: string; appointmentAt: string; notes?: string }
-) => request<BookingDraft>('/workspace/actions/prepare', { method: 'POST', body: JSON.stringify({ sessionId, action: 'CREATE_BOOKING', payload }) });
+  payload: {
+    name: string;
+    email: string;
+    phone: string;
+    serviceId: string;
+    appointmentAt: string;
+    notes?: string;
+  }
+) =>
+  request<BookingDraft>('/workspace/actions/prepare', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, action: 'CREATE_BOOKING', payload })
+  });
 export const confirmWorkspaceReceptionistBooking = (sessionId: string, draftId: string) =>
-  request<{ booking: Booking; manageToken: string }>('/workspace/actions/confirm', { method: 'POST', body: JSON.stringify({ sessionId, draftId, confirmed: true }) });
+  request<{ booking: Booking; manageToken: string }>('/workspace/actions/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ sessionId, draftId, confirmed: true })
+  });
 export const confirmReceptionistBooking = (sessionId: string, draftId: string) =>
   request<{ booking: Booking; manageToken: string }>('/receptionist/actions/confirm', {
     method: 'POST',
