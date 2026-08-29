@@ -4,6 +4,14 @@
 
 Delia is not a chatbot pasted onto a booking form. It is a multi-tenant receptionist system for service businesses: an owner teaches Delia their business, services, policies, and availability; customers can speak to it in a live call or use it on a website; confirmed actions land in that business’s private CRM.
 
+## Live deployment
+
+**[Open Delia →](https://16-170-11-95.sslip.io)**
+
+The current demo runs in AWS Stockholm (`eu-north-1`) on a deliberately small single-server footprint. Caddy terminates HTTPS and proxies the React application, NestJS API, and Socket.IO traffic; PostgreSQL 16 with pgvector runs alongside them on encrypted storage. Gemini generation, Google Cloud text-to-speech, and Google Cloud speech-to-text are enabled with the same application-level rate and usage controls used locally.
+
+This deployment favors a low idle cost over multi-zone redundancy. It has automatic container restarts, health checks, 2 GB of swap, Prisma migration history, and rotating nightly database backups, but it should be treated as a live product demo rather than a highly available production service.
+
 ## Why this project exists
 
 Most AI receptionist demos stop when a model can answer a friendly question. The hard product work starts after that:
@@ -78,6 +86,7 @@ Public website ─── Delia widget.js ─────────────
 | Voice            | Browser Web Speech fallback; optional Google Cloud TTS/STT via server-side ADC |
 | Public embed     | Vanilla JS Shadow DOM widget, scoped public keys, exact-origin checks          |
 | Quality gates    | ESLint, TypeScript, Vitest, Docker Compose, readiness checks                   |
+| Live deployment  | AWS Stockholm, single ARM64 EC2 host, Caddy HTTPS, encrypted EBS               |
 
 ## Engineering decisions that matter
 
@@ -136,6 +145,7 @@ Delia’s internal CRM is not a model memory store. It contains durable customer
 | Native internal CRM first                               | Guarantees a reliable source of truth for Delia actions                        | Add provider adapters, encrypted OAuth tokens, outbox sync, and reconciliation for HubSpot/Salesforce |
 | Exact-origin widget allowlist                           | Keeps the public embed predictable and constrained                             | Add signed installation verification and self-service domain verification for larger customers        |
 | Local Docker development stack                          | Reproducible API + database + web development                                  | Deploy API, database, widget asset host, and observability as separate production services            |
+| Single-server AWS demo                                  | Keeps the live product affordable at low traffic while preserving every feature | Move to managed, redundant services only when traffic and reliability requirements justify the cost   |
 
 ## Repository layout
 
@@ -146,6 +156,8 @@ apps/
 packages/
   contracts/              Shared API contracts and health schema
   prompts/                Versioned receptionist prompts
+deploy/low-cost/           Single-server AWS deployment, HTTPS proxy, and backups
+infra/                     Multi-service AWS Terraform stack for future scale
 docs/                     Engineering and deployment documentation
 docker-compose.yml        Local PostgreSQL, API, and Vite web stack
 ```
@@ -199,6 +211,22 @@ npm run dev
 ```
 
 The direct Vite development server runs on `http://localhost:5173` by default.
+
+## Deployment paths
+
+The repository keeps two AWS deployment profiles intentionally separate:
+
+- `deploy/low-cost/` is the active demo path. It runs the web app, API, PostgreSQL/pgvector, and Caddy on one ARM64 EC2 instance with encrypted storage and nightly backups.
+- `infra/` is the higher-availability Terraform path for ECS Fargate, RDS, an Application Load Balancer, Amplify Hosting, Secrets Manager, and managed scaling. It is substantially more expensive and is not used by the current live demo.
+
+The live deployment is available at [https://16-170-11-95.sslip.io](https://16-170-11-95.sslip.io). Its liveness and database-readiness endpoints are:
+
+```text
+https://16-170-11-95.sslip.io/api/health
+https://16-170-11-95.sslip.io/api/ready
+```
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the managed AWS release workflow. The low-cost deployment files are self-contained under [`deploy/low-cost/`](deploy/low-cost/).
 
 ## Google OAuth setup
 
@@ -289,9 +317,9 @@ The active API suite currently covers baseline health, environment validation, a
 
 ## Production readiness checklist
 
-- [ ] Set HTTPS-only production origins and secure cookie behavior.
+- [x] Set HTTPS-only deployed origins and secure cookie behavior.
 - [ ] Use managed PostgreSQL with backups, monitoring, and tested restores.
-- [ ] Run Prisma migrations as a deployment step.
+- [x] Run Prisma migrations as a deployment step.
 - [ ] Use workload identity/service attachment for Google Cloud, not downloaded key files.
 - [ ] Encrypt third-party CRM OAuth refresh tokens before introducing integrations.
 - [ ] Add a durable queue/outbox before syncing CRM actions to external providers.
