@@ -67,6 +67,7 @@ services:
     restart: unless-stopped
     environment:
       APP_HOSTNAME: ${APP_HOSTNAME}
+      LEGACY_HOSTNAME: ${LEGACY_HOSTNAME}
     ports:
       - "80:80"
       - "443:443"

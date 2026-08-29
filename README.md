@@ -6,7 +6,7 @@ Delia is not a chatbot pasted onto a booking form. It is a multi-tenant receptio
 
 ## Live deployment
 
-**[Open Delia →](https://16-170-11-95.sslip.io)**
+**[Open Delia →](https://delia.mehrabdev.com)**
 
 The current demo runs in AWS Stockholm (`eu-north-1`) on a deliberately small single-server footprint. Caddy terminates HTTPS and proxies the React application, NestJS API, and Socket.IO traffic; PostgreSQL 16 with pgvector runs alongside them on encrypted storage. Gemini generation, Google Cloud text-to-speech, and Google Cloud speech-to-text are enabled with the same application-level rate and usage controls used locally.
 
@@ -219,11 +219,11 @@ The repository keeps two AWS deployment profiles intentionally separate:
 - `deploy/low-cost/` is the active demo path. It runs the web app, API, PostgreSQL/pgvector, and Caddy on one ARM64 EC2 instance with encrypted storage and nightly backups.
 - `infra/` is the higher-availability Terraform path for ECS Fargate, RDS, an Application Load Balancer, Amplify Hosting, Secrets Manager, and managed scaling. It is substantially more expensive and is not used by the current live demo.
 
-The live deployment is available at [https://16-170-11-95.sslip.io](https://16-170-11-95.sslip.io). Its liveness and database-readiness endpoints are:
+The live deployment is available at [https://delia.mehrabdev.com](https://delia.mehrabdev.com). Its liveness and database-readiness endpoints are:
 
 ```text
-https://16-170-11-95.sslip.io/api/health
-https://16-170-11-95.sslip.io/api/ready
+https://delia.mehrabdev.com/api/health
+https://delia.mehrabdev.com/api/ready
 ```
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the managed AWS release workflow. The low-cost deployment files are self-contained under [`deploy/low-cost/`](deploy/low-cost/).

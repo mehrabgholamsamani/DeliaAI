@@ -23,3 +23,7 @@
     format json
   }
 }
+
+{$LEGACY_HOSTNAME} {
+  redir https://{$APP_HOSTNAME}{uri} permanent
+}
