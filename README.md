@@ -328,5 +328,3 @@ The active API suite currently covers baseline health, environment validation, a
 - [ ] Add consent/retention controls before collecting production call recordings or sensitive customer data.
 
 ---
-
-Built as a systems-focused product project: polished enough to demo, deliberate enough to discuss in an engineering interview.
