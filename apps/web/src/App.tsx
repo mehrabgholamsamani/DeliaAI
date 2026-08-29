@@ -105,6 +105,7 @@ import {
 import './styles.css';
 import { useVoiceReceptionist } from './hooks/useVoiceReceptionist';
 import ButtonWithIcon from '@/components/ui/button-with-icon';
+import { PrivacyPage, TermsPage } from './LegalPages';
 
 const today = new Date().toISOString().slice(0, 10);
 const tonePresets = [
@@ -283,13 +284,13 @@ function GoogleIcon() {
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isWorkspaceRoute = location.pathname.startsWith('/dashboard');
-  const usesMarketingChrome = ['/', '/login', '/signup', '/receptionist'].includes(location.pathname);
+  const usesMarketingChrome = ['/', '/login', '/signup', '/receptionist', '/privacy', '/terms'].includes(location.pathname);
   return (
     <>
       {!isWorkspaceRoute && (
         <header
           className={
-            ['/', '/receptionist', '/login', '/signup'].includes(location.pathname)
+            ['/', '/receptionist', '/login', '/signup', '/privacy', '/terms'].includes(location.pathname)
               ? 'site-header landing-header'
               : 'site-header'
           }
@@ -335,7 +336,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="landing-footer-bottom">
               <div>
-                <a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#cookies">Cookies</a>
+                <Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/privacy#cookies">Cookies</Link>
               </div>
               <span>© 2026 Delia. All rights reserved.</span>
             </div>
@@ -5769,6 +5770,8 @@ export function App() {
         <Route path="/" element={<Home />} />
         <Route path="/signup" element={<AuthPage mode="signup" />} />
         <Route path="/login" element={<AuthPage mode="login" />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route
           path="/onboarding"
           element={
