@@ -325,7 +325,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                 <span>Company</span>
                 <Link to="/login">Sign in</Link>
                 <Link to="/signup">Create account</Link>
-                <a href="mailto:hello@delia.ai">Contact</a>
+                <a href="mailto:mehrab@mehrabdev.com">Contact</a>
               </div>
               <div className="landing-footer-column">
                 <span>Product</span>

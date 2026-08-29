@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 const updated = 'August 29, 2026';
-const contact = 'hello@delia.ai';
+const contact = 'mehrab@mehrabdev.com';
 
 function LegalPage({ title, intro, children }: { title: string; intro: string; children: React.ReactNode }) {
   useEffect(() => {

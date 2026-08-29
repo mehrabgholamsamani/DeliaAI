@@ -86,7 +86,7 @@ export function PremiumAuth({
         {!signingUp && (
           <div className="premium-auth-options">
             <label><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /> Remember me</label>
-            <a href="mailto:support@delia.ai?subject=Password reset">Forgot password?</a>
+            <a href="mailto:mehrab@mehrabdev.com?subject=Delia password reset">Forgot password?</a>
           </div>
         )}
 
