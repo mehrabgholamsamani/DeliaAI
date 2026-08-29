@@ -11,6 +11,15 @@ export const speechRequestSchema = z.object({
 
 export const startCallSchema = z.object({});
 
+export const landingDemoStartSchema = z.object({
+  personaId: z.enum(['maya', 'john', 'sofia', 'leo'])
+});
+
+export const landingDemoChatSchema = z.object({
+  sessionId: z.string().cuid(),
+  message: z.string().trim().min(1).max(1200)
+});
+
 export const knowledgeArticleSchema = z.object({
   slug: z
     .string()

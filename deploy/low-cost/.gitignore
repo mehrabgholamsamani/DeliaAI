@@ -1,0 +1,5 @@
+.env.production
+google-credentials.json
+deployment-bundle.zip
+*.pem
+ssm-*.json

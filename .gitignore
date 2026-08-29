@@ -3,6 +3,11 @@ dist/
 coverage/
 test-results/
 playwright-report/
+infra/.terraform/
+infra/cdk.out/
+infra/*.tfstate*
+infra/*.tfplan
+infra/.terraform.tfvars
 .env
 .env.*
 !.env.example

@@ -3,9 +3,12 @@ import { AppService } from './app.service.js';
 
 describe('AppService', () => {
   it('reports a healthy API', () => {
-    const health = new AppService({
-      $queryRaw: async () => [{ '?column?': 1 }]
-    } as never).getHealth();
+    const health = new AppService(
+      {
+        $queryRaw: async () => [{ '?column?': 1 }]
+      } as never,
+      { get: () => false } as never
+    ).getHealth();
 
     expect(health.status).toBe('ok');
     expect(health.service).toBe('ai-receptionist-api');

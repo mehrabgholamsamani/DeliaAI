@@ -92,7 +92,10 @@ export class SpeechService {
       throw new HttpException('The monthly voice transcription allowance has been reached.', HttpStatus.TOO_MANY_REQUESTS);
     const project = this.config.get('GOOGLE_CLOUD_PROJECT', { infer: true });
     if (!project) throw new ServiceUnavailableException('Cloud transcription is not configured.');
-    const [business, services] = await Promise.all([this.crm.getBusiness(workspaceId), this.crm.listServices(false, workspaceId)]);
+    // listServices() ensures workspace defaults and may call getBusiness(). Keep
+    // these reads ordered so a brand-new workspace cannot race two upserts.
+    const business = await this.crm.getBusiness(workspaceId);
+    const services = await this.crm.listServices(false, workspaceId);
     const phrases = [business.businessName, ...services.map((service) => service.name), 'appointment', 'availability', 'booking', 'reschedule', 'cancel']
       .filter(Boolean)
       .slice(0, 100);

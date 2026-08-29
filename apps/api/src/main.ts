@@ -8,14 +8,25 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import type { Environment } from './config/environment.js';
 import { WidgetService } from './widget/widget.service.js';
+import { JsonLogger } from './observability/json-logger.js';
+import { requestLogging } from './observability/request-logging.middleware.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const bootstrapLogger = new JsonLogger(
+    (process.env.LOG_LEVEL as Environment['LOG_LEVEL'] | undefined) || 'log'
+  );
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, logger: bootstrapLogger });
   const config = app.get(ConfigService<Environment, true>);
   const widget = app.get(WidgetService);
+  app.useLogger(new JsonLogger(config.get('LOG_LEVEL', { infer: true })));
+  app.enableShutdownHooks();
+
+  const express = app.getHttpAdapter().getInstance() as { set(name: string, value: unknown): void };
+  express.set('trust proxy', config.get('TRUST_PROXY_HOPS', { infer: true }));
 
   app.use(helmet());
   app.use(cookieParser());
+  app.use(requestLogging);
   app.enableCors({
     origin: (
       origin: string | undefined,
@@ -42,10 +53,13 @@ async function bootstrap() {
     .build();
   SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
 
-  await app.listen(
-    config.get('PORT', { infer: true }) ?? config.get('API_PORT', { infer: true }),
-    '0.0.0.0'
-  );
+  const port =
+    config.get('PORT', { infer: true }) ?? config.get('API_PORT', { infer: true }) ?? 4000;
+  await app.listen(port, '0.0.0.0');
+  bootstrapLogger.log({ event: 'api_started', port });
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  new JsonLogger().fatal(error);
+  process.exitCode = 1;
+});

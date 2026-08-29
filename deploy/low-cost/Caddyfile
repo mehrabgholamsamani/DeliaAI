@@ -1,0 +1,25 @@
+{$APP_HOSTNAME} {
+  encode zstd gzip
+
+  handle /api/* {
+    reverse_proxy api:4000
+  }
+
+  handle /socket.io/* {
+    reverse_proxy api:4000
+  }
+
+  handle {
+    reverse_proxy web:80
+  }
+
+  header {
+    -Server
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  }
+
+  log {
+    output stdout
+    format json
+  }
+}

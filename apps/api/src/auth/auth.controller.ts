@@ -11,8 +11,11 @@ import {
   Put,
   Req,
   Res,
-  UseGuards
+  UseGuards,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
@@ -20,12 +23,21 @@ import { SessionAuthGuard, type AuthenticatedRequest } from './auth.guard.js';
 import { AuthService, SESSION_COOKIE } from './auth.service.js';
 import type { Environment } from '../config/environment.js';
 import { ConfigService } from '@nestjs/config';
-import { loginSchema, onboardingSchema, signUpSchema, workspaceSettingsSchema } from './auth.schemas.js';
+import {
+  loginSchema,
+  onboardingSchema,
+  signUpSchema,
+  workspaceSettingsSchema
+} from './auth.schemas.js';
 import { AiService } from '../ai/ai.service.js';
 import { KnowledgeService } from '../ai/knowledge.service.js';
 import { chatInputSchema, knowledgeArticleSchema } from '../ai/ai.schemas.js';
 import { CrmService } from '../crm/crm.service.js';
-import { availabilityQuerySchema, serviceInputSchema, workspaceBookingUpdateSchema } from '../crm/crm.schemas.js';
+import {
+  availabilityQuerySchema,
+  serviceInputSchema,
+  workspaceBookingUpdateSchema
+} from '../crm/crm.schemas.js';
 import { ReceptionistWorkflowService } from '../ai/receptionist-workflow.service.js';
 import { confirmActionSchema, prepareActionSchema } from '../ai/receptionist-workflow.schemas.js';
 
@@ -143,6 +155,46 @@ export class WorkspaceController {
     return this.knowledge.remove(slug, request.account!.workspaceId);
   }
 
+  @Get('knowledge/documents')
+  listDocuments(@Req() request: AuthenticatedRequest) {
+    return this.knowledge.listDocuments(request.account!.workspaceId);
+  }
+
+  @Post('knowledge/documents')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  uploadDocument(
+    @Req() request: AuthenticatedRequest,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: { title?: string; category?: string }
+  ) {
+    return this.knowledge.uploadDocument(file, body, request.account!.workspaceId);
+  }
+
+  @Put('knowledge/documents/:id')
+  updateDocument(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ) {
+    return this.knowledge.updateDocument(
+      id,
+      parse(knowledgeDocumentUpdateSchema, body),
+      request.account!.workspaceId
+    );
+  }
+
+  @Delete('knowledge/documents/:id')
+  @HttpCode(204)
+  deleteDocument(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.knowledge.deleteDocument(id, request.account!.workspaceId);
+  }
+
+  @Post('knowledge/documents/:id/reindex')
+  reindexDocument(@Req() request: AuthenticatedRequest, @Param('id') id: string) {
+    return this.knowledge.reindexDocument(id, request.account!.workspaceId);
+  }
+
   @Post('chat')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   chat(@Req() request: AuthenticatedRequest, @Body() body: unknown) {
@@ -173,8 +225,16 @@ export class WorkspaceController {
   }
 
   @Put('crm/bookings/:id')
-  updateCrmBooking(@Req() request: AuthenticatedRequest, @Param('id') id: string, @Body() body: unknown) {
-    return this.crm.updateWorkspaceBooking(id, parse(workspaceBookingUpdateSchema, body), request.account!.workspaceId);
+  updateCrmBooking(
+    @Req() request: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ) {
+    return this.crm.updateWorkspaceBooking(
+      id,
+      parse(workspaceBookingUpdateSchema, body),
+      request.account!.workspaceId
+    );
   }
 
   @Post('crm/bookings/:id/cancel')
@@ -205,3 +265,12 @@ export class WorkspaceController {
     return this.workflow.confirm(parse(confirmActionSchema, body), request.account!.workspaceId);
   }
 }
+
+const knowledgeDocumentUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(160).optional(),
+    category: z.enum(['COMPANY', 'SERVICE', 'POLICY', 'FAQ', 'PROMOTION', 'INTERNAL']).optional(),
+    isActive: z.boolean().optional()
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one field is required.');

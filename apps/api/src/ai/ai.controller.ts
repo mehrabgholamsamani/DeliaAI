@@ -23,6 +23,8 @@ import {
   chatInputSchema,
   handoffRequestSchema,
   knowledgeArticleSchema,
+  landingDemoChatSchema,
+  landingDemoStartSchema,
   speechRequestSchema,
   startCallSchema
 } from './ai.schemas.js';
@@ -52,6 +54,12 @@ export class AiController {
   @Post('calls') startCall(@Body() body: unknown) {
     parse(startCallSchema, body);
     return this.ai.startCall();
+  }
+  @Post('landing-demo/calls') startLandingDemo(@Body() body: unknown) {
+    return this.ai.startLandingDemo(parse(landingDemoStartSchema, body).personaId);
+  }
+  @Post('landing-demo/chat') chatLandingDemo(@Body() body: unknown) {
+    return this.ai.chatLandingDemo(parse(landingDemoChatSchema, body));
   }
   @Post('actions/prepare') prepareAction(@Body() body: unknown) {
     return this.workflow.prepare(parse(prepareActionSchema, body));

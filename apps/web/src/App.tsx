@@ -34,6 +34,7 @@ import {
   cancelManagedBooking,
   cancelWorkspaceCrmBooking,
   chatPublicWidget,
+  chatWithLandingDemo,
   chatWithReceptionist,
   createHandoffRequest,
   confirmReceptionistBooking,
@@ -82,8 +83,8 @@ import {
   saveWorkspaceWidget,
   signUp,
   startGoogleLogin,
+  startLandingDemoCall,
   startPublicWidget,
-  startReceptionistCall,
   startWorkspaceReceptionistCall,
   type Booking,
   type CrmCustomer,
@@ -282,23 +283,21 @@ function GoogleIcon() {
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isWorkspaceRoute = location.pathname.startsWith('/dashboard');
-  const usesMarketingChrome = ['/', '/login', '/signup'].includes(location.pathname);
+  const usesMarketingChrome = ['/', '/login', '/signup', '/receptionist'].includes(location.pathname);
   return (
     <>
-      {!isWorkspaceRoute && !['/login', '/signup'].includes(location.pathname) && (
+      {!isWorkspaceRoute && (
         <header
-          className={location.pathname === '/' ? 'site-header landing-header' : 'site-header'}
+          className={
+            ['/', '/receptionist', '/login', '/signup'].includes(location.pathname)
+              ? 'site-header landing-header'
+              : 'site-header'
+          }
         >
           <Link className="brand" to="/">
             <img src="/delia-logo.svg" alt="DeliaAI" />
           </Link>
           <nav aria-label="Primary navigation">
-            <Link className="landing-nav-link" to="/#product">
-              Product
-            </Link>
-            <Link className="landing-nav-link" to="/#how-it-works">
-              How it works
-            </Link>
             <NavLink to="/receptionist">Live demo</NavLink>
             <NavLink to="/login">Sign in</NavLink>
             <Link className="button header-cta" to="/signup">
@@ -515,7 +514,13 @@ function LandingVoiceDemo() {
   const [seconds, setSeconds] = useState(0);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [answer, setAnswer] = useState('Ask me about Delia, how it works, or what it can do.');
+  const sessionRef = useRef<string>();
+  const sendingRef = useRef(false);
   const receptionist = landingReceptionists[selected];
+  const voice = useVoiceReceptionist((text) => void sendMessage(text));
 
   useEffect(() => {
     if (!inCall) return;
@@ -523,24 +528,68 @@ function LandingVoiceDemo() {
     return () => window.clearInterval(timer);
   }, [inCall]);
 
-  const startCall = () => {
+  const startCall = async () => {
     setSeconds(0);
     setInCall(true);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const greeting = new SpeechSynthesisUtterance(
-        `Hi, I'm ${receptionist.name}, your Delia receptionist. How can I help today?`
+    setMuted(false);
+    setSending(true);
+    setAnswer(`Connecting you with ${receptionist.name}…`);
+    try {
+      await voice.prepareMicrophone().catch(() => undefined);
+      const result = await startLandingDemoCall(
+        receptionist.name.toLowerCase() as 'maya' | 'john' | 'sofia' | 'leo'
       );
-      greeting.rate = 0.96;
-      window.speechSynthesis.speak(greeting);
+      sessionRef.current = result.sessionId;
+      setAnswer(result.reply.displayText);
+      void voice.speak(result.reply.spokenText, result.sessionId, voice.start);
+    } catch {
+      setAnswer('The Delia demo could not connect. Please try again.');
+      setInCall(false);
+    } finally {
+      setSending(false);
     }
   };
 
+  async function sendMessage(value: string) {
+    const text = value.trim();
+    const sessionId = sessionRef.current;
+    if (!text || !sessionId || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    setAnswer(`You asked: “${text}”`);
+    try {
+      const result = await chatWithLandingDemo(text, sessionId);
+      sessionRef.current = result.sessionId;
+      setAnswer(result.reply.displayText);
+      if (speaker) void voice.speak(result.reply.spokenText, result.sessionId, voice.start);
+      else if (!muted) voice.start();
+    } catch {
+      setAnswer('I could not answer that right now. Please try another question.');
+      if (!muted) voice.start();
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }
+
+  const submitMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const text = message.trim();
+    if (!text) return;
+    setMessage('');
+    voice.stop();
+    void sendMessage(text);
+  };
+
   const closeDemo = () => {
-    window.speechSynthesis?.cancel();
+    voice.endSession();
+    sessionRef.current = undefined;
     setOpen(false);
     setInCall(false);
     setSeconds(0);
+    setSending(false);
+    sendingRef.current = false;
+    setAnswer('Ask me about Delia, how it works, or what it can do.');
   };
 
   const moveOrb = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -668,22 +717,31 @@ function LandingVoiceDemo() {
                     </button>
                   ))}
                 </div>
-                <button className="voice-start-call" type="button" onClick={startCall}>Start call</button>
+                <button className="voice-start-call" type="button" onClick={() => void startCall()}>Start call</button>
                 <p className="voice-privacy">This browser demo uses your device audio controls. No call recording is stored.</p>
               </>
             ) : (
               <div className="voice-call-active">
                 <img src={receptionist.image} alt="" />
                 <span className="voice-live-label">Live with {receptionist.name}</span>
-                <h2 id="voice-demo-title">Hi, how can I help today?</h2>
-                <p>Ask me about services, availability, or booking an appointment.</p>
-                <div className="voice-call-wave" aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>
+                <h2 id="voice-demo-title">Ask me about Delia.</h2>
+                <p className="voice-demo-answer" aria-live="polite">{answer}</p>
+                <div className={`voice-call-wave ${voice.listening || voice.speaking ? 'active' : ''}`} aria-hidden="true">{Array.from({ length: 17 }, (_, index) => <i key={index} />)}</div>
                 <time>{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</time>
+                <span className="voice-demo-status">
+                  {sending ? 'Thinking…' : voice.speaking ? 'Speaking…' : voice.listening ? voice.interim || 'Listening…' : 'Ready for your question'}
+                </span>
                 <div className="voice-call-controls">
-                  <button className={!speaker ? 'off' : ''} type="button" onClick={() => setSpeaker((value) => !value)} aria-label="Toggle speaker"><Volume2 /></button>
+                  <button className={!speaker ? 'off' : ''} type="button" onClick={() => { setSpeaker((value) => !value); if (speaker) voice.stopSpeaking(); }} aria-label="Toggle speaker"><Volume2 /></button>
                   <button className="hangup" type="button" onClick={closeDemo} aria-label="End call"><PhoneCall /></button>
-                  <button className={muted ? 'off' : ''} type="button" onClick={() => setMuted((value) => !value)} aria-label="Toggle microphone"><Mic /></button>
+                  <button className={muted ? 'off' : ''} type="button" onClick={() => { if (muted) voice.start(); else voice.stop(); setMuted((value) => !value); }} aria-label="Toggle microphone"><Mic /></button>
                 </div>
+                <form className="voice-demo-message" onSubmit={submitMessage}>
+                  <input value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1200} placeholder="Or type a question about Delia" aria-label="Question for Delia" />
+                  <button type="submit" disabled={sending || !message.trim()} aria-label="Send question"><Send /></button>
+                </form>
+                {(voice.error || !voice.supported) && <p className="voice-demo-help">{voice.error || 'Voice input is not supported in this browser. You can type your question instead.'}</p>}
+                <p className="voice-demo-boundary">This demo answers questions about Delia. It cannot make or change bookings.</p>
               </div>
             )}
           </section>
@@ -835,6 +893,107 @@ function LandingDashboardPreview() {
         </main>
       </div>
     </div>
+  );
+}
+
+type LandingChatMessage = {
+  id: number;
+  role: 'assistant' | 'user';
+  text: string;
+};
+
+function LandingChatbot() {
+  const [open, setOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>();
+  const [messages, setMessages] = useState<LandingChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [connectAttempted, setConnectAttempted] = useState(false);
+  const messageId = useRef(0);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open || sessionId || sending || connectAttempted) return;
+    setConnectAttempted(true);
+    setSending(true);
+    void startLandingDemoCall('maya')
+      .then((result) => {
+        setSessionId(result.sessionId);
+        setMessages([
+          { id: ++messageId.current, role: 'assistant', text: 'Hi! What would you like to know about Delia?' }
+        ]);
+        setError('');
+      })
+      .catch(() => setError('Delia could not connect. Please try again.'))
+      .finally(() => setSending(false));
+  }, [connectAttempted, open, sending, sessionId]);
+
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, sending, open]);
+
+  async function sendChatMessage(value: string) {
+    const text = value.trim();
+    if (!text || !sessionId || sending) return;
+    setMessages((current) => [
+      ...current,
+      { id: ++messageId.current, role: 'user', text }
+    ]);
+    setInput('');
+    setSending(true);
+    setError('');
+    try {
+      const result = await chatWithLandingDemo(text, sessionId);
+      setSessionId(result.sessionId);
+      setMessages((current) => [
+        ...current,
+        { id: ++messageId.current, role: 'assistant', text: result.reply.displayText }
+      ]);
+    } catch {
+      setError('I could not answer that right now. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function submitChat(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void sendChatMessage(input);
+  }
+
+  return (
+    <aside className={`landing-chatbot ${open ? 'open' : ''}`} aria-label="Ask Delia about the product">
+      {open && (
+        <section className="landing-chat-panel" role="dialog" aria-modal="false" aria-label="Chat with Delia">
+          <button className="landing-chat-close" type="button" onClick={() => setOpen(false)} aria-label="Close Delia chat"><X /></button>
+          <div className="landing-chat-messages" ref={listRef} aria-live="polite">
+            {messages.map((item) => (
+              <p className={item.role} key={item.id}>{item.text}</p>
+            ))}
+            {sending && <p className="assistant landing-chat-typing"><i /><i /><i /></p>}
+            {error && (
+              <p className="landing-chat-error">
+                {error}
+                {!sessionId && (
+                  <button type="button" onClick={() => { setError(''); setConnectAttempted(false); }}>
+                    Try again
+                  </button>
+                )}
+              </p>
+            )}
+          </div>
+          <form onSubmit={submitChat}>
+            <input value={input} onChange={(event) => setInput(event.target.value)} maxLength={1200} placeholder="Ask about Delia…" aria-label="Message Delia" />
+            <button type="submit" disabled={!sessionId || sending || !input.trim()} aria-label="Send message"><Send /></button>
+          </form>
+        </section>
+      )}
+      <button className="landing-chat-launcher" type="button" onClick={() => setOpen((value) => { const next = !value; if (next && !sessionId) setConnectAttempted(false); return next; })} aria-expanded={open} aria-label={open ? 'Close Delia chat' : 'Chat with Delia'}>
+        {open ? <X /> : <MessageSquareText />}
+      </button>
+    </aside>
   );
 }
 
@@ -1197,6 +1356,7 @@ function Home() {
         </div>
       </section>
       <LandingVoiceDemo />
+      <LandingChatbot />
       <ScrollRevealStatement />
       <section className="landing-faq landing-faq-retired" aria-labelledby="faq-heading">
         <div>
@@ -3876,7 +4036,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
   }, [calling, sending]);
 
   useEffect(() => {
-    void (workspaceMode ? getWorkspaceServices() : getServices()).then(setServices);
+    if (workspaceMode) void getWorkspaceServices().then(setServices);
   }, [workspaceMode]);
   useEffect(() => {
     detailsRef.current = bookingDetails;
@@ -4035,7 +4195,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
       }
       const result = await (workspaceMode
         ? startWorkspaceReceptionistCall()
-        : startReceptionistCall());
+        : startLandingDemoCall('maya'));
       trackUxEvent('receptionist_call_started', { workspace_mode: workspaceMode });
       if (callAttemptRef.current !== attempt) {
         voice.endSession();
@@ -4184,7 +4344,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
     try {
       const result = await (workspaceMode
         ? chatWithWorkspaceReceptionist(message, activeSession)
-        : chatWithReceptionist(message, activeSession));
+        : chatWithLandingDemo(message, activeSession));
       sessionRef.current = result.sessionId;
       setSessionId(result.sessionId);
       if (result.reply.receptionist?.name) setReceptionistName(result.reply.receptionist.name);
@@ -4234,8 +4394,8 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
   }
 
   return (
-    <main className={`page receptionist-page ${workspaceMode ? 'receptionist-page-minimal' : ''}`}>
-      <aside className="receptionist-roster" aria-label="Receptionist team">
+    <main className={`page receptionist-page ${workspaceMode ? 'receptionist-page-minimal' : 'receptionist-page-public'}`}>
+      {workspaceMode && <aside className="receptionist-roster" aria-label="Receptionist team">
         {[
           ['maya', 'Maya'],
           ['john', 'John'],
@@ -4252,17 +4412,17 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
             <span>{receptionistId === id && calling ? `${name} is answering` : name}</span>
           </div>
         ))}
-      </aside>
+      </aside>}
       <div className="receptionist-call-panel">
-        <div className="demo-heading">
+        {workspaceMode && <div className="demo-heading">
           <p className="eyebrow">Live product demo</p>
           <h1>Talk to Delia as if you were a customer.</h1>
           <p>
             Ask about a service, opening hours, or try to make a booking. Delia will speak back and
             keep a live record of the call.
           </p>
-        </div>
-        {!calling && (
+        </div>}
+        {workspaceMode && !calling && (
           <section className="call-start-card">
             <div>
               <strong>Before you call</strong>
@@ -4280,7 +4440,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
             </div>
           </section>
         )}
-        {calling && receptionistName && (
+        {workspaceMode && calling && receptionistName && (
           <p className="eyebrow">{receptionistName} is on the line</p>
         )}
         <section className="call-phone-stage">
@@ -4325,6 +4485,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
             </button>
           </div>
         </section>
+        {workspaceMode && <>
         <section className="voice-controls">
           {/* Legacy press-and-hold controls retained temporarily for source compatibility.
         <button
@@ -4371,9 +4532,11 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
             </p>
           )}
         </section>
-        <p className="interim" aria-live="polite">
-          {status}
-        </p>
+        {(workspaceMode || calling) && (
+          <p className="interim call-status" aria-live="polite">
+            {status}
+          </p>
+        )}
         {calling && (
           <section className="call-transcript" aria-live="polite">
             <strong>Live call notes</strong>
@@ -4442,7 +4605,7 @@ function ReceptionistPage({ workspaceMode = false }: { workspaceMode?: boolean }
             <Link to="/dashboard/crm">View in CRM</Link>
           </div>
         )}
-        {!workspaceMode && sessionId && <VoiceManageBooking sessionId={sessionId} />}
+        </>}
       </div>
     </main>
   );
@@ -4720,6 +4883,9 @@ function WorkspaceReceptionist() {
   );
 }
 
+// Retained for the legacy booking-management route while the public live demo
+// intentionally stays phone-only.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function VoiceManageBooking({ sessionId }: { sessionId: string }) {
   const [token, setToken] = useState('');
   const [booking, setBooking] = useState<Booking>();

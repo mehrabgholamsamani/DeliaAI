@@ -396,6 +396,16 @@ export const startReceptionistCall = () =>
     method: 'POST',
     body: JSON.stringify({})
   });
+export const startLandingDemoCall = (personaId: 'maya' | 'john' | 'sofia' | 'leo') =>
+  request<{ sessionId: string; reply: ReceptionistReply }>('/receptionist/landing-demo/calls', {
+    method: 'POST',
+    body: JSON.stringify({ personaId })
+  });
+export const chatWithLandingDemo = (message: string, sessionId: string) =>
+  request<{ sessionId: string; reply: ReceptionistReply }>('/receptionist/landing-demo/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message, sessionId })
+  });
 export async function getReceptionistSpeech(
   sessionId: string,
   signal?: AbortSignal

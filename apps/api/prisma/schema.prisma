@@ -18,56 +18,58 @@ model PlatformSetting {
 }
 
 model BusinessSettings {
-  id                  String   @id @default(cuid())
-  workspaceId         String   @unique @default("legacy")
-  businessName        String
-  industry            String   @default("")
-  timezone            String   @default("Europe/Berlin")
-  operatingWeekdays   Int[]    @default([1, 2, 3, 4, 5])
-  slotStartHours      Int[]    @default([9, 10, 11, 13, 14, 15, 16])
-  slotDurationMinutes Int      @default(60)
-  bookingPaused       Boolean  @default(false)
-  bookingPauseMessage String?
-  companyDescription  String   @default("")
-  greeting            String   @default("Hello. How can I help you today?")
-  assistantTone       String   @default("warm and professional")
-  bookingInstructions String   @default("Offer live availability and always ask for confirmation before booking.")
-  handoffInstructions String   @default("Offer a human handoff when the answer is not in approved knowledge.")
-  contactDetails      String   @default("")
-  receptionistPersonaId String @default("maya")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  workspaceId           String    @unique @default("legacy")
+  businessName          String
+  industry              String    @default("")
+  timezone              String    @default("Europe/Berlin")
+  operatingWeekdays     Int[]     @default([1, 2, 3, 4, 5])
+  slotStartHours        Int[]     @default([9, 10, 11, 13, 14, 15, 16])
+  slotDurationMinutes   Int       @default(60)
+  bookingPaused         Boolean   @default(false)
+  bookingPauseMessage   String?
+  companyDescription    String    @default("")
+  greeting              String    @default("Hello. How can I help you today?")
+  assistantTone         String    @default("warm and professional")
+  bookingInstructions   String    @default("Offer live availability and always ask for confirmation before booking.")
+  handoffInstructions   String    @default("Offer a human handoff when the answer is not in approved knowledge.")
+  contactDetails        String    @default("")
+  receptionistPersonaId String    @default("maya")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  workspace             Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model Workspace {
-  id                  String   @id @default(cuid())
-  name                String
-  onboardingCompleted Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  owner               UserAccount?
-  businessSettings    BusinessSettings?
-  services            Service[]
-  customers           Customer[]
-  bookings            Booking[]
+  id                    String                 @id @default(cuid())
+  name                  String
+  onboardingCompleted   Boolean                @default(false)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  owner                 UserAccount?
+  businessSettings      BusinessSettings?
+  services              Service[]
+  customers             Customer[]
+  bookings              Booking[]
   availabilityOverrides AvailabilityOverride[]
-  knowledgeArticles   KnowledgeArticle[]
-  handoffRequests     HandoffRequest[]
-  receptionistFeedback ReceptionistFeedback[]
-  conversationSessions ConversationSession[]
-  publicReceptionist  PublicReceptionist?
-  auditLogs           AuditLog[]
+  knowledgeArticles     KnowledgeArticle[]
+  knowledgeDocuments    KnowledgeDocument[]
+  knowledgeChunks       KnowledgeChunk[]
+  handoffRequests       HandoffRequest[]
+  receptionistFeedback  ReceptionistFeedback[]
+  conversationSessions  ConversationSession[]
+  publicReceptionist    PublicReceptionist?
+  auditLogs             AuditLog[]
 }
 
 model UserAccount {
-  id           String        @id @default(cuid())
-  email        String        @unique
+  id           String         @id @default(cuid())
+  email        String         @unique
   passwordHash String
-  workspaceId  String        @unique
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId  String         @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sessions     AuthSession[]
   identities   AuthIdentity[]
 }
@@ -127,15 +129,15 @@ model Service {
 }
 
 model Customer {
-  id        String    @id @default(cuid())
-  workspaceId String  @default("legacy")
-  name      String
-  email     String
-  phone     String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  bookings  Booking[]
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String    @default("legacy")
+  name        String
+  email       String
+  phone       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  bookings    Booking[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, email])
 }
@@ -195,92 +197,157 @@ model AdminUser {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  workspaceId String  @default("legacy")
-  action     String
-  targetType String
-  targetId   String?
-  actorType  String
-  actorId    String?
-  metadata   Json?
-  createdAt  DateTime @default(now())
-  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String    @default("legacy")
+  action      String
+  targetType  String
+  targetId    String?
+  actorType   String
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([targetType, targetId, createdAt])
   @@index([createdAt])
 }
 
 model KnowledgeArticle {
-  id        String   @id @default(cuid())
-  workspaceId String @default("legacy")
-  slug      String
-  title     String
-  content   String
-  isActive  Boolean  @default(true)
-  category  String   @default("FAQ")
-  sourceLabel String?
-  embedding Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                    String                  @id @default(cuid())
+  workspaceId           String                  @default("legacy")
+  slug                  String
+  title                 String
+  content               String
+  isActive              Boolean                 @default(true)
+  category              String                  @default("FAQ")
+  sourceLabel           String?
+  embedding             Json?
+  indexingStatus        KnowledgeIndexingStatus @default(PENDING)
+  indexingRevision      Int                     @default(1)
+  indexingAttempts      Int                     @default(0)
+  indexingNextAttemptAt DateTime                @default(now())
+  indexingLeaseUntil    DateTime?
+  indexingError         String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chunks                KnowledgeChunk[]
 
   @@unique([workspaceId, slug])
+  @@unique([id, workspaceId])
+  @@index([workspaceId, indexingStatus, indexingNextAttemptAt])
+}
+
+enum KnowledgeIndexingStatus {
+  PENDING
+  INDEXING
+  READY
+  FAILED
+}
+
+model KnowledgeDocument {
+  id                    String                  @id @default(cuid())
+  workspaceId           String
+  title                 String
+  filename              String
+  mimeType              String
+  category              String                  @default("FAQ")
+  extractedText         String
+  byteCount             Int
+  pageCount             Int?
+  isActive              Boolean                 @default(true)
+  indexingStatus        KnowledgeIndexingStatus @default(PENDING)
+  indexingRevision      Int                     @default(1)
+  indexingAttempts      Int                     @default(0)
+  indexingNextAttemptAt DateTime                @default(now())
+  indexingLeaseUntil    DateTime?
+  indexingError         String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chunks                KnowledgeChunk[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, indexingStatus, indexingNextAttemptAt])
+}
+
+model KnowledgeChunk {
+  id             String                      @id @default(cuid())
+  workspaceId    String
+  articleId      String?
+  documentId     String?
+  sourceRevision Int
+  ordinal        Int
+  text           String
+  searchVector   Unsupported("tsvector")?
+  embedding      Unsupported("vector(768)")?
+  embeddingModel String?
+  contentHash    String
+  createdAt      DateTime                    @default(now())
+  workspace      Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  article        KnowledgeArticle?           @relation(fields: [articleId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  document       KnowledgeDocument?          @relation(fields: [documentId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([articleId, sourceRevision, ordinal])
+  @@unique([documentId, sourceRevision, ordinal])
+  @@index([workspaceId, articleId, sourceRevision])
+  @@index([workspaceId, documentId, sourceRevision])
 }
 
 model HandoffRequest {
-  id        String   @id @default(cuid())
-  workspaceId String @default("legacy")
-  name      String
-  email     String
-  phone     String
-  message   String
-  sessionId String?
-  status    String   @default("OPEN")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String    @default("legacy")
+  name        String
+  email       String
+  phone       String
+  message     String
+  sessionId   String?
+  status      String    @default("OPEN")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
 }
 
 model ReceptionistFeedback {
-  id        String   @id @default(cuid())
-  workspaceId String @default("legacy")
-  question  String
-  sessionId String?
-  status    String   @default("OPEN")
-  createdAt DateTime @default(now())
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  workspaceId String    @default("legacy")
+  question    String
+  sessionId   String?
+  status      String    @default("OPEN")
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
 }
 
 model ConversationSession {
-  id        String                @id @default(cuid())
-  workspaceId String              @default("legacy")
-  summary   String                @default("")
-  context   Json                  @default("{}")
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-  messages  ConversationMessage[]
+  id                  String                     @id @default(cuid())
+  workspaceId         String                     @default("legacy")
+  summary             String                     @default("")
+  context             Json                       @default("{}")
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  messages            ConversationMessage[]
   publicWidgetSession PublicWidgetSession?
-  usage     AiUsageRecord[]
-  speechUsage SpeechUsageRecord[]
-  transcriptionUsage TranscriptionUsageRecord[]
-  workspace          Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  usage               AiUsageRecord[]
+  speechUsage         SpeechUsageRecord[]
+  transcriptionUsage  TranscriptionUsageRecord[]
+  workspace           Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
 
 model PublicReceptionist {
-  id             String   @id @default(cuid())
-  workspaceId    String   @unique
-  publicKey      String   @unique
-  allowedOrigins String[] @default([])
-  greeting       String   @default("")
-  brandColor     String   @default("#111210")
-  isEnabled      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id             String                @id @default(cuid())
+  workspaceId    String                @unique
+  publicKey      String                @unique
+  allowedOrigins String[]              @default([])
+  greeting       String                @default("")
+  brandColor     String                @default("#111210")
+  isEnabled      Boolean               @default(false)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sessions       PublicWidgetSession[]
 }
 
@@ -298,22 +365,22 @@ model PublicWidgetSession {
 }
 
 model TranscriptionUsageRecord {
-  id        String              @id @default(cuid())
+  id        String               @id @default(cuid())
   sessionId String?
   seconds   Int
   source    String
-  createdAt DateTime            @default(now())
+  createdAt DateTime             @default(now())
   session   ConversationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
 }
 
 model SpeechUsageRecord {
-  id        String              @id @default(cuid())
-  sessionId String
+  id         String              @id @default(cuid())
+  sessionId  String
   characters Int
-  createdAt DateTime            @default(now())
-  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime            @default(now())
+  session    ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([sessionId, createdAt])
@@ -325,11 +392,11 @@ enum ConversationRole {
 }
 
 model ConversationMessage {
-  id        String           @id @default(cuid())
+  id        String              @id @default(cuid())
   sessionId String
   role      ConversationRole
   content   String
-  createdAt DateTime         @default(now())
+  createdAt DateTime            @default(now())
   session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
@@ -361,15 +428,15 @@ enum ReceptionistDraftStatus {
 }
 
 model ReceptionistActionDraft {
-  id        String                   @id @default(cuid())
-  sessionId String
-  action    ReceptionistAction
-  payload   Json
-  status    ReceptionistDraftStatus  @default(PENDING_CONFIRMATION)
+  id              String                  @id @default(cuid())
+  sessionId       String
+  action          ReceptionistAction
+  payload         Json
+  status          ReceptionistDraftStatus @default(PENDING_CONFIRMATION)
   executionResult Json?
-  expiresAt DateTime
-  createdAt DateTime                 @default(now())
-  updatedAt DateTime                 @updatedAt
+  expiresAt       DateTime
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   @@index([sessionId, status, expiresAt])
 }

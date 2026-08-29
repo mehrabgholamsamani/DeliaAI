@@ -1,0 +1,106 @@
+name: Deploy AWS
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        {
+          description: Deployment environment,
+          required: true,
+          type: choice,
+          options: [staging, production],
+          default: staging
+        }
+      image_tag: { description: Optional immutable image tag, required: false, type: string }
+permissions: { contents: read, id-token: write }
+concurrency: { group: 'deploy-${{ inputs.environment }}', cancel-in-progress: false }
+jobs:
+  deploy:
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_environment: ${{ inputs.environment }}
+      TF_VAR_web_origin: ${{ vars.WEB_ORIGIN }}
+      TF_VAR_api_origin: ${{ vars.API_ORIGIN }}
+      TF_VAR_application_secret_arn: ${{ secrets.APPLICATION_SECRET_ARN }}
+      TF_VAR_certificate_arn: ${{ vars.CERTIFICATE_ARN }}
+      TF_VAR_hosted_zone_id: ${{ vars.HOSTED_ZONE_ID }}
+      TF_VAR_root_domain: ${{ vars.ROOT_DOMAIN }}
+      TF_VAR_api_domain_name: ${{ vars.API_DOMAIN_NAME }}
+      TF_VAR_web_subdomain: ${{ vars.WEB_SUBDOMAIN || 'app' }}
+      TF_VAR_desired_count: ${{ vars.DESIRED_COUNT || '1' }}
+      TF_VAR_image_tag: ${{ inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: '1.13.3', terraform_wrapper: false }
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          {
+            role-to-assume: '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
+            aws-region: '${{ vars.AWS_REGION }}'
+          }
+      - run: npm ci
+      - name: Validate configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_REGION:?Set AWS_REGION}"; : "${AWS_DEPLOY_ROLE_ARN:?Set AWS_DEPLOY_ROLE_ARN}"
+          : "${TF_STATE_BUCKET:?Set TF_STATE_BUCKET}"; : "${TF_VAR_web_origin:?Set WEB_ORIGIN}"
+          : "${TF_VAR_api_origin:?Set API_ORIGIN}"; : "${TF_VAR_application_secret_arn:?Set APPLICATION_SECRET_ARN}"
+      - name: Initialize Terraform
+        working-directory: infra
+        run: terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="key=delia/${TF_VAR_environment}.tfstate" -backend-config="region=$AWS_REGION" -backend-config="use_lockfile=true"
+      - name: Create image repository
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve -target=aws_ecr_repository.api -target=aws_ecr_lifecycle_policy.api
+      - name: Build and push immutable API image
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="$(terraform -chdir=infra output -raw ecr_repository_url)"
+          REPOSITORY="${REPO##*/}"
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$TF_VAR_image_tag" >/dev/null 2>&1; then
+            echo "Using existing immutable image $REPO:$TF_VAR_image_tag"
+          else
+            aws ecr get-login-password | docker login --username AWS --password-stdin "${REPO%/*}"
+            docker build -f apps/api/Dockerfile -t "$REPO:$TF_VAR_image_tag" .
+            docker push "$REPO:$TF_VAR_image_tag"
+          fi
+      - name: Apply migration runtime and dependencies
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve -target=aws_ecs_cluster.main -target=aws_route_table_association.app -target=aws_ecs_task_definition.api -target=aws_ecs_task_definition.migration
+      - name: Run and verify database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLUSTER="$(terraform -chdir=infra output -raw ecs_cluster_name)"
+          TASK="$(terraform -chdir=infra output -raw migration_task_definition_arn)"
+          SG="$(terraform -chdir=infra output -raw api_security_group_id)"
+          SUBNETS="$(terraform -chdir=infra output -json application_subnet_ids | jq -r 'join(",")')"
+          ARN="$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$TASK" --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" --query 'tasks[0].taskArn' --output text)"
+          test "$ARN" != "None"; aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$ARN"
+          CODE="$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$ARN" --query 'tasks[0].containers[0].exitCode' --output text)"
+          test "$CODE" = "0"
+      - name: Apply service and hosting
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve
+      - name: Deploy Amplify web artifact
+        env: { VITE_API_ORIGIN: '${{ vars.API_ORIGIN }}' }
+        shell: bash
+        run: |
+          npm run build --workspace=@receptionist/web
+          cd apps/web/dist && zip -qr ../../../web-dist.zip . && cd ../../..
+          APP="$(terraform -chdir=infra output -raw amplify_app_id)"
+          DEPLOYMENT="$(aws amplify create-deployment --app-id "$APP" --branch-name main)"
+          curl --fail --silent --show-error -T web-dist.zip "$(jq -r .zipUploadUrl <<<"$DEPLOYMENT")"
+          aws amplify start-deployment --app-id "$APP" --branch-name main --job-id "$(jq -r .jobId <<<"$DEPLOYMENT")"
+      - name: Smoke-check API
+        shell: bash
+        run: for attempt in {1..30}; do curl --fail --silent "$TF_VAR_api_origin/api/ready" && exit 0; sleep 10; done; exit 1

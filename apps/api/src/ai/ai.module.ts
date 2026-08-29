@@ -7,6 +7,9 @@ import { KnowledgeService } from './knowledge.service.js';
 import { ReceptionistWorkflowService } from './receptionist-workflow.service.js';
 import { ReceptionistGateway } from './receptionist.gateway.js';
 import { SpeechService } from './speech.service.js';
+import { DocumentParserService } from './document-parser.service.js';
+import { GeminiEmbeddingProvider } from './embedding.service.js';
+import { KnowledgeIndexerService } from './knowledge-indexer.service.js';
 
 @Module({
   imports: [CrmModule, NotificationsModule],
@@ -16,7 +19,10 @@ import { SpeechService } from './speech.service.js';
     KnowledgeService,
     ReceptionistWorkflowService,
     ReceptionistGateway,
-    SpeechService
+    SpeechService,
+    DocumentParserService,
+    GeminiEmbeddingProvider,
+    KnowledgeIndexerService
   ],
   exports: [AiService, KnowledgeService, ReceptionistWorkflowService]
 })

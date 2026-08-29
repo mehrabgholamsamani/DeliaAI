@@ -53,6 +53,17 @@ export const receptionistReplySchema = z.object({
     })
     .optional(),
   citedKnowledgeIds: z.array(z.string().max(120)).max(6),
+  citations: z
+    .array(
+      z.object({
+        id: z.string().max(120),
+        label: z.string().max(160),
+        sourceType: z.enum(['ARTICLE', 'DOCUMENT']),
+        category: z.string().max(40)
+      })
+    )
+    .max(6)
+    .optional(),
   receptionist: z
     .object({
       id: z.string().max(40),

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { Prisma, ReceptionistAction, ReceptionistDraftStatus } from '@prisma/client';
 import { CrmService } from '../crm/crm.service.js';
@@ -30,6 +30,8 @@ export class ReceptionistWorkflowService {
       select: { id: true, context: true }
     });
     if (!session) throw new NotFoundException('Conversation session was not found');
+    if (conversationContext(session.context).landingDemo === true)
+      throw new ForbiddenException('The landing demo cannot perform booking actions');
     const action = input.action as ReceptionistAction;
     const graph = new StateGraph(DraftState)
       .addNode('persist_draft', async (state) => {
@@ -99,6 +101,8 @@ export class ReceptionistWorkflowService {
       select: { id: true, context: true }
     });
     if (!session) throw new NotFoundException('The confirmation request is invalid or expired');
+    if (conversationContext(session.context).landingDemo === true)
+      throw new ForbiddenException('The landing demo cannot perform booking actions');
     if (draft.status === ReceptionistDraftStatus.EXECUTED && draft.executionResult)
       return draft.executionResult;
     if (draft.expiresAt <= new Date())

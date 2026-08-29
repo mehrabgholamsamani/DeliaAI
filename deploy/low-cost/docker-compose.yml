@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_receptionist
+      POSTGRES_USER: receptionist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U receptionist -d ai_receptionist"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://receptionist:${POSTGRES_PASSWORD}@postgres:5432/ai_receptionist?schema=public
+      API_PORT: 4000
+      PORT: 4000
+      NODE_ENV: production
+      WEB_ORIGIN: https://${APP_HOSTNAME}
+      GOOGLE_OAUTH_REDIRECT_URI: https://${APP_HOSTNAME}/api/auth/google/callback
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-credentials.json
+      TRUST_PROXY_HOPS: 1
+    volumes:
+      - ./google-credentials.json:/run/secrets/google-credentials.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 900M
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/low-cost/web.Dockerfile
+      args:
+        VITE_API_ORIGIN: ""
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_HOSTNAME: ${APP_HOSTNAME}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

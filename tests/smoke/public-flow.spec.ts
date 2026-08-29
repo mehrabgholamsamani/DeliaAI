@@ -16,7 +16,9 @@ async function mockPlatformApi(page: Page) {
     route.fulfill({
       json: {
         timezone: 'Europe/Berlin',
-        days: [{ date: '2026-07-16', slots: [{ startAt: '2026-07-16T09:00:00.000Z', available: true }] }]
+        days: [
+          { date: '2026-07-16', slots: [{ startAt: '2026-07-16T09:00:00.000Z', available: true }] }
+        ]
       }
     })
   );
@@ -65,7 +67,7 @@ test.beforeEach(async ({ page }) => mockPlatformApi(page));
 
 test('current public pages render and navigate', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /never miss the next customer/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /your front desk, always ready/i })).toBeVisible();
   await page.goto('/services');
   await expect(page.getByRole('heading', { name: /choose the appointment/i })).toBeVisible();
   await page.getByRole('link', { name: /book this service/i }).click();

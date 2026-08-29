@@ -1,0 +1,10 @@
+aws_region            = "eu-central-1"
+environment           = "staging"
+web_origin            = "https://app.example.com"
+api_origin            = "https://api.example.com"
+image_tag              = "git-commit-sha"
+desired_count          = 1
+application_secret_arn = "arn:aws:secretsmanager:eu-central-1:123456789012:secret:delia/staging/app"
+# certificate_arn = "arn:aws:acm:eu-central-1:123456789012:certificate/..."
+# hosted_zone_id = "Z0123456789"
+# root_domain = "example.com"

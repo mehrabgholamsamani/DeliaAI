@@ -6,6 +6,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/prompts/package.json packages/prompts/package.json
 RUN npm ci
+RUN npm install --no-save @rollup/rollup-linux-arm64-musl @napi-rs/canvas-linux-arm64-musl
 COPY . .
 RUN npm run db:generate
 RUN npm run build:platform
@@ -24,4 +25,4 @@ COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/prompts/package.json ./packages/prompts/package.json
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || process.env.API_PORT || 4000) + '/api/ready').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["sh", "-c", "npx prisma migrate deploy --schema apps/api/prisma/schema.prisma && node apps/api/dist/main.js"]
+CMD ["node", "apps/api/dist/main.js"]
