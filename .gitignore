@@ -11,4 +11,5 @@ infra/.terraform.tfvars
 .env
 .env.*
 !.env.example
+deploy/low-cost/google-credentials.json
 *.log

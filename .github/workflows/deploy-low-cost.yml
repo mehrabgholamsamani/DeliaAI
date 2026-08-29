@@ -89,8 +89,11 @@ jobs:
           jq -n --arg sha "$RELEASE_SHA" '{commands:[
             "set -euo pipefail",
             "cd /opt/delia",
+            "git config --global --add safe.directory /opt/delia",
+            "if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git init; fi",
+            "if git remote get-url origin >/dev/null 2>&1; then git remote set-url origin https://github.com/mehrabgholamsamani/DeliaAI.git; else git remote add origin https://github.com/mehrabgholamsamani/DeliaAI.git; fi",
             "git fetch --quiet origin " + $sha,
-            "git checkout --detach " + $sha,
+            "git checkout --force --detach " + $sha,
             "chmod 0755 deploy/low-cost/release.sh",
             "deploy/low-cost/release.sh"
           ]}' > ssm-parameters.json
