@@ -1,0 +1,137 @@
+name: Deploy low-cost AWS
+
+on:
+  workflow_run:
+    workflows: ['Verify app']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit on main to deploy (defaults to the latest main commit)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-low-cost-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
+      AWS_DEPLOY_ROLE_ARN: arn:aws:iam::878155244945:role/delia-low-cost-github-deploy
+      STACK_NAME: delia-low-cost
+      APP_ORIGIN: https://delia.mehrabdev.com
+    steps:
+      - name: Resolve release commit
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_SHA: ${{ inputs.commit_sha }}
+          VERIFIED_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == 'workflow_run' ]]; then
+            sha="$VERIFIED_SHA"
+          elif [[ -n "$MANUAL_SHA" ]]; then
+            sha="$MANUAL_SHA"
+          else
+            sha="${{ github.sha }}"
+          fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?Set repository variable AWS_LOW_COST_DEPLOY_ROLE_ARN}"
+          test "$AWS_REGION" = 'eu-north-1'
+          git fetch --quiet origin main
+          git merge-base --is-ancestor "${{ steps.release.outputs.sha }}" origin/main
+
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy verified commit through SSM
+        id: deploy
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          instance_id="$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" \
+            --output text)"
+          [[ "$instance_id" =~ ^i-[0-9a-f]+$ ]]
+
+          jq -n --arg sha "$RELEASE_SHA" '{commands:[
+            "set -euo pipefail",
+            "cd /opt/delia",
+            "git fetch --quiet origin " + $sha,
+            "git checkout --detach " + $sha,
+            "chmod 0755 deploy/low-cost/release.sh",
+            "deploy/low-cost/release.sh"
+          ]}' > ssm-parameters.json
+
+          command_id="$(aws ssm send-command \
+            --instance-ids "$instance_id" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy Delia $RELEASE_SHA" \
+            --parameters file://ssm-parameters.json \
+            --query 'Command.CommandId' \
+            --output text)"
+          echo "command_id=$command_id" >> "$GITHUB_OUTPUT"
+          echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
+
+          wait_status=1
+          for attempt in {1..150}; do
+            status="$(aws ssm get-command-invocation \
+              --command-id "$command_id" --instance-id "$instance_id" \
+              --query Status --output text 2>/dev/null || true)"
+            case "$status" in
+              Success) wait_status=0; break ;;
+              Failed|Cancelled|TimedOut|Cancelling) break ;;
+            esac
+            sleep 10
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$instance_id" --output text
+          exit "$wait_status"
+
+      - name: Verify public deployment
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..18}; do
+            health="$(curl --fail --silent --show-error "$APP_ORIGIN/api/ready" || true)"
+            if [[ -n "$health" ]]; then
+              curl --fail --silent --show-error "$APP_ORIGIN/privacy" | grep -q '<div id="root"></div>'
+              curl --fail --silent --show-error "$APP_ORIGIN/terms" | grep -q '<div id="root"></div>'
+              echo "Deployed $RELEASE_SHA to $APP_ORIGIN"
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1

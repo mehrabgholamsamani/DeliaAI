@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: No-cost GitHub Actions OIDC role for deploying Delia to its existing EC2 host through SSM.
+
+Parameters:
+  GitHubRepository:
+    Type: String
+    Default: mehrabgholamsamani/DeliaAI
+    AllowedPattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'
+  GitHubOidcProviderArn:
+    Type: String
+    Description: ARN of the account's token.actions.githubusercontent.com OIDC provider.
+  ApplicationStackName:
+    Type: String
+    Default: delia-low-cost
+
+Resources:
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: delia-low-cost-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub 'repo:${GitHubRepository}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: DeployExistingDeliaHost
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadApplicationStack
+                Effect: Allow
+                Action: cloudformation:DescribeStacks
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*'
+              - Sid: UseRunShellScriptDocument
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript'
+              - Sid: RunCommandOnlyOnDelia
+                Effect: Allow
+                Action: ssm:SendCommand
+                Resource: !Sub 'arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*'
+                Condition:
+                  StringEquals:
+                    ssm:resourceTag/Application: Delia
+              - Sid: ReadDeploymentCommand
+                Effect: Allow
+                Action:
+                  - ssm:GetCommandInvocation
+                  - ssm:ListCommandInvocations
+                Resource: '*'
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt GitHubDeployRole.Arn

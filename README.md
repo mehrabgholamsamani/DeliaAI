@@ -228,6 +228,8 @@ https://delia.mehrabdev.com/api/health
 https://delia.mehrabdev.com/api/ready
 ```
 
+Every push to `main` runs the full **Verify app** workflow. After it succeeds, **Deploy low-cost AWS** assumes a repository-scoped AWS role through GitHub OIDC, asks SSM to deploy that exact verified commit on the existing EC2 host, runs database migrations, rebuilds the API and web containers, and checks the private and public readiness endpoints. It does not create ECS, RDS, Amplify, a load balancer, or any other paid deployment tier. The OIDC role is defined in `deploy/low-cost/github-oidc-role.yml`, and the workflow is fixed to Stockholm (`eu-north-1`).
+
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the managed AWS release workflow. The low-cost deployment files are self-contained under [`deploy/low-cost/`](deploy/low-cost/).
 
 ## Google OAuth setup
