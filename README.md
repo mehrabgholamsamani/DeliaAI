@@ -8,9 +8,11 @@ Delia is not a chatbot pasted onto a booking form. It is a multi-tenant receptio
 
 **[Open Delia →](https://delia.mehrabdev.com)**
 
-The current demo runs in AWS Stockholm (`eu-north-1`) on a deliberately small single-server footprint. Caddy terminates HTTPS and proxies the React application, NestJS API, and Socket.IO traffic; PostgreSQL 16 with pgvector runs alongside them on encrypted storage. Gemini generation, Google Cloud text-to-speech, and Google Cloud speech-to-text are enabled with the same application-level rate and usage controls used locally.
+Due to me being a student and not having a lot of money, the current demo runs in AWS Stockholm (`eu-north-1`) on a deliberately small single-server footprint :), Caddy terminates HTTPS and proxies the React application, NestJS API, and Socket.IO traffic; PostgreSQL 16 with pgvector runs alongside them on encrypted storage. Gemini generation, Google Cloud text-to-speech, and Google Cloud speech-to-text are enabled with the same application-level rate and usage controls used locally.
 
-This deployment favors a low idle cost over multi-zone redundancy. It has automatic container restarts, health checks, 2 GB of swap, Prisma migration history, and rotating nightly database backups, but it should be treated as a live product demo rather than a highly available production service.
+I try my best to make this deployment favors a low idle cost over multi-zone redundancy. It has automatic container restarts, health checks, 2 GB of swap, Prisma migration history, and rotating nightly database backups, but it should be treated as a live product demo rather than a highly available production service :)
+
+But due the scope and complexity of this application, keeping the app live for a long duration is not possible due to cost issues, so Delia will be live for 28 days :(
 
 ## Why this project exists
 
