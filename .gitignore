@@ -12,4 +12,5 @@ infra/.terraform.tfvars
 .env.*
 !.env.example
 deploy/low-cost/google-credentials.json
+DELIA_DEPLOYMENT_NOTES.txt
 *.log
