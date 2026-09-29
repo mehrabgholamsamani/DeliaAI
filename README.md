@@ -8,7 +8,7 @@ Delia is not a chatbot pasted onto a booking form. It is a multi-tenant receptio
 
 **[Open Delia →](https://delia.mehrabdev.com)**
 
-Friends! big updates, first thing first, thanks for using Delia, we have had over 100 users signing in and using the service:))) Delia is going through a big update, as my GCP free account got expired, so multiple dependencies stopped working, I will somehow get another free GCP account and bring the voice of Delia back :)), in the mean time, Delia is relying on its fallback which is the browser default voice.
+**Friends! big updates, first thing first, thanks for using Delia, we have had over 100 users signing in and using the service:))) Delia is going through a big update, as my GCP free account got expired, so multiple dependencies stopped working, I will somehow get another free GCP account and bring the voice of Delia back :)), in the mean time, Delia is relying on its fallback which is the browser default voice.**
 
 Due to me being a student and not having a lot of money, the current demo runs in AWS Stockholm (`eu-north-1`) on a deliberately small single-server footprint :), Caddy terminates HTTPS and proxies the React application, NestJS API, and Socket.IO traffic; PostgreSQL 16 with pgvector runs alongside them on encrypted storage. Gemini generation, Google Cloud text-to-speech, and Google Cloud speech-to-text are enabled with the same application-level rate and usage controls used locally.
 
